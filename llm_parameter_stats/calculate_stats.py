@@ -1,0 +1,183 @@
+import os
+import shutil
+import itertools
+from tqdm import tqdm
+
+from beartype import beartype
+import torch
+from torch import nn
+import pandas as pd
+
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+NUM_HISTOGRAM_BINS = 100
+
+
+@beartype 
+def add_parameter_statistics(
+        results: dict[str, torch.Tensor],
+        parameter: nn.Parameter | torch.Tensor,
+        name: str, 
+        step: int,
+        step_next: int | None = None,
+) -> dict[str, torch.Tensor]:
+    results["parameter"].append(name)
+    results["step"].append(step)
+    if step_next is not None:
+        results["step_next"].append(step_next)
+
+    resuts["mean"].append(torch.mean(parameter))
+    results["std"].append(torch.std(parameter))
+    results["maximum"].append(torch.max(parameter))
+    results["minimum"].append(torch.min(parameter))
+    results["abs_mean"].append(torch.mean(torch.abs(parameter)))
+    results["abs_std"].append(torch.std(torch.abs(parameter)))
+    results["abs_maximum"].append(torch.max(torch.abs(parameter)))
+    results["abs_minimum"].append(torch.min(torch.abs(parameter)))
+    return results
+
+
+@beartype
+def add_histogram(
+        results: dict[str, torch.Tensor],
+        parameter: nn.Parameter | torch.Tensor,
+        name: str,
+        step: int,
+) -> dict[str, torch.Tensor]:
+    counts, bin_edges = torch.histogram(parameter, bins=NUM_HISTOGRAM_BINS)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    bin_width = bin_edges[1] - bin_edges[0]
+    
+    results["parameter"].append(name)
+    results["step"].append(step)
+    results["counts"].append(counts)
+    results["bin_centers"].append(bin_centers)
+    results["bin_width"].append(bin_width)
+
+    return results
+
+
+@beartype
+def main() -> None:
+    os.makedirs("results", exist_ok=True)
+
+    # model_sizes = [
+    #     "70m", "70m-deduped",
+    #     "160m", "160m-deduped",
+    #     "410m", "410m-deduped", 
+    #     "1b", "1b-deduped",
+    #     "1.4b", "1.4b-deduped",
+    #     "2.8b", "2.8b-deduped",
+    #     "6.9b", "6.9b-deduped",
+    #     "12b", "12b-deduped",
+    # ]
+    # steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+    model_sizes = ["70m"]
+    steps = [0, 1]
+
+    for model_size in model_sizes:
+        title = "| ANALYZING NEW MODEL SIZE |"
+        width = len(title)
+        title = f"\n\n{'=' * width}\n{title}\n{'=' * width}\n"
+        title += f"| Size: {model_size} |\n\n"
+
+        print(title)
+
+        loop = tqdm(itertools.pairwise(steps), total=len(steps) - 1)
+        for step_n, step_n_next in loop:
+            loop.set_description(f"Step: {step_n}, {step_n_next} :: {len(steps) - 1}")
+
+            # Load the models
+            if step_n == 0:
+                model_n = GPTNeoXForCausalLM.from_pretrained(
+                    f"EleutherAI/pythia-{model_size}",
+                    revision=f"step{step}",
+                    cache_dir=f"./pythia-{model_size}/step{step}",
+                )
+            else:
+                model_n = model_n_next
+
+            cache_dir_last = f"./pythia-{model_size}/step{step_n}"
+            cache_dir = f"./pythia-{model_size}/step{step_n_next}"
+
+            model_n_next = GPTNeoXForCausalLM.from_pretrained(
+                f"EleutherAI/pythia-{model_size}",
+                revision=f"step{step_n_next}",
+                cache_dir=cache_dir,
+            )
+
+            results_intra_parameter = {
+                "parameter": [],
+                "step": [],
+                "mean": [],
+                "std": [],
+                "maximum": [],
+                "minimum": [],
+                "abs_mean": [],
+                "abs_std": [],
+                "abs_maximum": [],
+                "abs_minimum": [],
+            }
+
+            results_histogram = {
+                "parameter": [],
+                "step": [],
+                "counts": [],
+                "bin_centers": [],
+                "bin_width": [],
+            }
+
+            results_inter_parameter = {
+                "parameter": [],
+                "step": [],
+                "step_next": [],
+                "cos_sim_mean": [],
+                "cos_sim_std": [],
+                "cos_sim_maximum": [],
+                "cos_sim_minimum": [],
+                "cos_sim_abs_mean": [],
+                "cos_sim_abs_std": [],
+                "cos_sim_abs_maximum": [],
+                "cos_sim_abs_minimum": [],
+            }
+
+            # Calculate the statistics
+            for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
+                model_n.named_parameters(), model_n_next.named_parameters()
+            ):
+                # Speed up by moving to GPU if available
+                parameter_n = parameter_n.to(DEVICE)
+                parameter_n_next = parameter_n_next.to(DEVICE)
+
+                # Intra-parameter statistics
+                results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
+                results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
+                if step_n_next == steps[-1]:
+                    results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
+                    results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
+
+                # Inter-parameter statistics
+                cos_sim = torch.nn.functional.cosine_similarity(
+                    parameter_n.flatten(), parameter_n_next.flatten(), dim=0
+                )
+
+                results_inter_parameter = add_parameter_statistics(results, cos_sim, name_n, step_n, step_n_next)
+
+                # Free up GPU memory
+                parameter_n = parameter_n.cpu()
+                parameter_n_next = parameter_n_next.cpu()
+
+            # Free up storage
+            shutil.rmtree(cache_dir_last)
+
+        # Save the results
+        df_intra_parameter = pd.DataFrame(results_intra_parameter)
+        df_inter_parameter = pd.DataFrame(results_inter_parameter)
+        df_histogram = pd.DataFrame(results_histogram)
+        df_intra_parameter.to_csv(f"results/pythia-{model_size}/intra_parameter.csv")
+        df_inter_parameter.to_csv(f"results/pythia-{model_size}/inter_parameter.csv")
+        df_histogram.to_csv(f"results/pythia-{model_size}/histogram.csv")
+
+
+if __name__ == "__main__":
+    main()
