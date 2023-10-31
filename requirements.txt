@@ -1,0 +1,8 @@
+torch
+transformers
+pandas
+beartype
+rich
+einops
+jaxtyping
+tqdm
