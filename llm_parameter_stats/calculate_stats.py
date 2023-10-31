@@ -7,6 +7,7 @@ from beartype import beartype
 import torch
 from torch import nn
 import pandas as pd
+from transformers import GPTNeoXForCausalLM
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -26,14 +27,15 @@ def add_parameter_statistics(
     if step_next is not None:
         results["step_next"].append(step_next)
 
-    resuts["mean"].append(torch.mean(parameter))
-    results["std"].append(torch.std(parameter))
-    results["maximum"].append(torch.max(parameter))
-    results["minimum"].append(torch.min(parameter))
-    results["abs_mean"].append(torch.mean(torch.abs(parameter)))
-    results["abs_std"].append(torch.std(torch.abs(parameter)))
-    results["abs_maximum"].append(torch.max(torch.abs(parameter)))
-    results["abs_minimum"].append(torch.min(torch.abs(parameter)))
+    prefix = "" if step_next is None else "cos_sim_"
+    results[f"{prefix}mean"].append(torch.mean(parameter).detach().cpu().numpy())
+    results[f"{prefix}std"].append(torch.std(parameter).detach().cpu().numpy())
+    results[f"{prefix}maximum"].append(torch.max(parameter).detach().cpu().numpy())
+    results[f"{prefix}minimum"].append(torch.min(parameter).detach().cpu().numpy())
+    results[f"{prefix}abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy())
+    results[f"{prefix}abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy())
+    results[f"{prefix}abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy())
+    results[f"{prefix}abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy())
     return results
 
 
@@ -50,9 +52,9 @@ def add_histogram(
     
     results["parameter"].append(name)
     results["step"].append(step)
-    results["counts"].append(counts)
-    results["bin_centers"].append(bin_centers)
-    results["bin_width"].append(bin_width)
+    results["counts"].append(counts.detach().cpu().numpy())
+    results["bin_centers"].append(bin_centers.detach().cpu().numpy())
+    results["bin_width"].append(bin_width.item())
 
     return results
 
@@ -91,8 +93,8 @@ def main() -> None:
             if step_n == 0:
                 model_n = GPTNeoXForCausalLM.from_pretrained(
                     f"EleutherAI/pythia-{model_size}",
-                    revision=f"step{step}",
-                    cache_dir=f"./pythia-{model_size}/step{step}",
+                    revision=f"step{step_n}",
+                    cache_dir=f"./pythia-{model_size}/step{step_n}",
                 )
             else:
                 model_n = model_n_next
@@ -161,7 +163,7 @@ def main() -> None:
                     parameter_n.flatten(), parameter_n_next.flatten(), dim=0
                 )
 
-                results_inter_parameter = add_parameter_statistics(results, cos_sim, name_n, step_n, step_n_next)
+                results_inter_parameter = add_parameter_statistics(results_inter_parameter, cos_sim, name_n, step_n, step_n_next)
 
                 # Free up GPU memory
                 parameter_n = parameter_n.cpu()
@@ -171,12 +173,13 @@ def main() -> None:
             shutil.rmtree(cache_dir_last)
 
         # Save the results
+        os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
         df_intra_parameter = pd.DataFrame(results_intra_parameter)
         df_inter_parameter = pd.DataFrame(results_inter_parameter)
         df_histogram = pd.DataFrame(results_histogram)
-        df_intra_parameter.to_csv(f"results/pythia-{model_size}/intra_parameter.csv")
-        df_inter_parameter.to_csv(f"results/pythia-{model_size}/inter_parameter.csv")
-        df_histogram.to_csv(f"results/pythia-{model_size}/histogram.csv")
+        df_intra_parameter.to_csv(f"results/pythia-{model_size}/intra_parameter.csv", index=False)
+        df_inter_parameter.to_csv(f"results/pythia-{model_size}/inter_parameter.csv", index=False)
+        df_histogram.to_csv(f"results/pythia-{model_size}/histogram.csv", index=False)
 
 
 if __name__ == "__main__":
