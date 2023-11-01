@@ -53,8 +53,8 @@ def add_histogram(
     
     results["parameter"].append(name)
     results["step"].append(step)
-    results["counts"].append(counts.detach().cpu().numpy())
-    results["bin_centers"].append(bin_centers.detach().cpu().numpy())
+    results["counts"].append(list(counts.detach().cpu().numpy()))
+    results["bin_centers"].append(list(bin_centers.detach().cpu().numpy()))
     results["bin_width"].append(bin_width.item())
 
     return results
@@ -88,6 +88,41 @@ def main() -> None:
 
         print(title)
 
+        results_intra_parameter = {
+            "parameter": [],
+            "step": [],
+            "mean": [],
+            "std": [],
+            "maximum": [],
+            "minimum": [],
+            "abs_mean": [],
+            "abs_std": [],
+            "abs_maximum": [],
+            "abs_minimum": [],
+        }
+
+        results_histogram = {
+            "parameter": [],
+            "step": [],
+            "counts": [],
+            "bin_centers": [],
+            "bin_width": [],
+        }
+
+        results_inter_parameter = {
+            "parameter": [],
+            "step": [],
+            "step_next": [],
+            "cos_sim_mean": [],
+            "cos_sim_std": [],
+            "cos_sim_maximum": [],
+            "cos_sim_minimum": [],
+            "cos_sim_abs_mean": [],
+            "cos_sim_abs_std": [],
+            "cos_sim_abs_maximum": [],
+            "cos_sim_abs_minimum": [],
+        }
+
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i}/{len(steps) - 1}\n")
 
@@ -109,41 +144,6 @@ def main() -> None:
                 revision=f"step{step_n_next}",
                 cache_dir=cache_dir,
             )
-
-            results_intra_parameter = {
-                "parameter": [],
-                "step": [],
-                "mean": [],
-                "std": [],
-                "maximum": [],
-                "minimum": [],
-                "abs_mean": [],
-                "abs_std": [],
-                "abs_maximum": [],
-                "abs_minimum": [],
-            }
-
-            results_histogram = {
-                "parameter": [],
-                "step": [],
-                "counts": [],
-                "bin_centers": [],
-                "bin_width": [],
-            }
-
-            results_inter_parameter = {
-                "parameter": [],
-                "step": [],
-                "step_next": [],
-                "cos_sim_mean": [],
-                "cos_sim_std": [],
-                "cos_sim_maximum": [],
-                "cos_sim_minimum": [],
-                "cos_sim_abs_mean": [],
-                "cos_sim_abs_std": [],
-                "cos_sim_abs_maximum": [],
-                "cos_sim_abs_minimum": [],
-            }
 
             # Calculate the statistics
             for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
