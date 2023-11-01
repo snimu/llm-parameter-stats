@@ -6,3 +6,4 @@ rich
 einops
 jaxtyping
 tqdm
+matplotlib
