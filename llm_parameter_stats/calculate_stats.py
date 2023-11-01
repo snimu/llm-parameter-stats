@@ -3,6 +3,7 @@ import shutil
 import itertools
 from tqdm import tqdm
 
+import rich
 from beartype import beartype
 import torch
 from torch import nn
@@ -73,9 +74,10 @@ def main() -> None:
     #     "6.9b", "6.9b-deduped",
     #     "12b", "12b-deduped",
     # ]
-    # steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
-    model_sizes = ["70m"]
-    steps = [0, 1]
+    steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+    model_sizes = ["70m", "70m-deduped", "160m", "160m-deduped", "410m", "410m-deduped"]
+    # steps = [0, 1]
+    print(len(steps))
 
     for model_size in model_sizes:
         title = "| ANALYZING NEW MODEL SIZE |"
@@ -85,9 +87,8 @@ def main() -> None:
 
         print(title)
 
-        loop = tqdm(itertools.pairwise(steps), total=len(steps) - 1)
-        for step_n, step_n_next in loop:
-            loop.set_description(f"Step: {step_n}, {step_n_next} :: {len(steps) - 1}")
+        for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
+            rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i}/{len(steps) - 1}\n")
 
             # Load the models
             if step_n == 0:
