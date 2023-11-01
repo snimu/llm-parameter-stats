@@ -145,6 +145,9 @@ def main() -> None:
                 cache_dir=cache_dir,
             )
 
+            all_parameter_values = torch.tensor([])
+            all_parameter_values_next = torch.tensor([])
+
             # Calculate the statistics
             for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
                 model_n.named_parameters(), model_n_next.named_parameters()
@@ -155,10 +158,14 @@ def main() -> None:
 
                 # Intra-parameter statistics
                 results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
+                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
                 results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
                 if step_n_next == steps[-1]:
                     results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
                     results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
+                    # The histogram of the values has to happen independently for every step, 
+                    #   so we have to save the values for the next step independently as well.
+                    all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
 
                 # Inter-parameter statistics
                 cos_sim = torch.nn.functional.cosine_similarity(
@@ -170,6 +177,11 @@ def main() -> None:
                 # Free up GPU memory
                 parameter_n = parameter_n.cpu()
                 parameter_n_next = parameter_n_next.cpu()
+
+            # Histogram
+            results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
+            if step_n_next == steps[-1]:
+                results_histogram = add_histogram(results_histogram, all_parameter_values_next, "all_parameters", step_n_next)
 
             # Free up storage
             shutil.rmtree(cache_dir_last)
