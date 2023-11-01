@@ -76,9 +76,7 @@ def main() -> None:
     #     "12b", "12b-deduped",
     # ]
     steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
-    model_sizes = ["70m", "70m-deduped", "160m", "160m-deduped", "410m", "410m-deduped"]
-    # steps = [0, 1]
-    print(len(steps))
+    model_sizes = ["70m", "70m-deduped"]
 
     for model_size in model_sizes:
         title = "| ANALYZING NEW MODEL SIZE |"
@@ -179,13 +177,13 @@ def main() -> None:
                 parameter_n_next = parameter_n_next.cpu()
 
             # Add data for all parameters
-            results_inter_parameter = add_parameter_statistics(results_inter_parameter, all_parameter_values, "all_parameters", step_n)
             results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
             results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
             if step_n_next == steps[-1]:
-                results_inter_parameter = add_parameter_statistics(results_inter_parameter, all_parameter_values_next, "all_parameters", step_n_next)
                 results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next)
                 results_histogram = add_histogram(results_histogram, all_parameter_values_next, "all_parameters", step_n_next)
+            else:
+                results_inter_parameter = add_parameter_statistics(results_inter_parameter, all_parameter_values, "all_parameters", step_n, step_n_next)
 
             # Free up storage
             shutil.rmtree(cache_dir_last)
