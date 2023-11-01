@@ -186,6 +186,9 @@ def main() -> None:
             # Free up storage
             shutil.rmtree(cache_dir_last)
 
+        # Free up more memory
+        shutil.rmtree(cache_dir)
+        
         # Save the results
         os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
         df_intra_parameter = pd.DataFrame(results_intra_parameter)
