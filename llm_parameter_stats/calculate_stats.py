@@ -178,9 +178,13 @@ def main() -> None:
                 parameter_n = parameter_n.cpu()
                 parameter_n_next = parameter_n_next.cpu()
 
-            # Histogram
+            # Add data for all parameters
+            results_inter_parameter = add_parameter_statistics(results_inter_parameter, all_parameter_values, "all_parameters", step_n)
+            results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
             results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
             if step_n_next == steps[-1]:
+                results_inter_parameter = add_parameter_statistics(results_inter_parameter, all_parameter_values_next, "all_parameters", step_n_next)
+                results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next)
                 results_histogram = add_histogram(results_histogram, all_parameter_values_next, "all_parameters", step_n_next)
 
             # Free up storage
