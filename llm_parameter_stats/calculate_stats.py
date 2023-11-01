@@ -63,6 +63,7 @@ def add_histogram(
 @beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
+    os.makedirs("models", exist_ok=True)
 
     # model_sizes = [
     #     "70m", "70m-deduped",
@@ -90,18 +91,18 @@ def main() -> None:
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i}/{len(steps) - 1}\n")
 
+            cache_dir_last = f"models/pythia-{model_size}/step{step_n}"
+            cache_dir = f"models/pythia-{model_size}/step{step_n_next}"
+
             # Load the models
             if step_n == 0:
                 model_n = GPTNeoXForCausalLM.from_pretrained(
                     f"EleutherAI/pythia-{model_size}",
                     revision=f"step{step_n}",
-                    cache_dir=f"./pythia-{model_size}/step{step_n}",
+                    cache_dir=cache_dir_last,
                 )
             else:
                 model_n = model_n_next
-
-            cache_dir_last = f"./pythia-{model_size}/step{step_n}"
-            cache_dir = f"./pythia-{model_size}/step{step_n_next}"
 
             model_n_next = GPTNeoXForCausalLM.from_pretrained(
                 f"EleutherAI/pythia-{model_size}",
