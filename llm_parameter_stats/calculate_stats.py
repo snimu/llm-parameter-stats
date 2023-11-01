@@ -124,7 +124,7 @@ def main() -> None:
         }
 
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
-            rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i}/{len(steps) - 1}\n")
+            rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)}\n")
 
             cache_dir_last = f"models/pythia-{model_size}/step{step_n}"
             cache_dir = f"models/pythia-{model_size}/step{step_n_next}"
