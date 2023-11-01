@@ -105,7 +105,7 @@ def analyze_model(model_size: str) -> None:
 @beartype 
 def analyze_all() -> None:
     model_sizes = [
-        "70m", # "70m-deduped",
+        "70m", "70m-deduped",
         # "160m", "160m-deduped",
         # "410m", "410m-deduped", 
         # "1b", "1b-deduped",
