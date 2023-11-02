@@ -155,6 +155,9 @@ cython_debug/
 # The downloaded models
 llm_parameter_stats/models/*
 
+# Damn .DS_Store
+.DS_Store*
+
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
