@@ -68,11 +68,11 @@ def histogram_video(df: pd.DataFrame, model_size: str, parameter: str) -> None:
             bin_centers = ast.literal_eval(data['bin_centers'].values[0])
             bin_width = data['bin_width'].values[0]
             counts = ast.literal_eval(data['counts'].values[0])
-        except SyntaxError:
+        except SyntaxError:  # in case data is saved as np.array
             bin_centers = str_to_list(data['bin_centers'].values[0])
             bin_width = data['bin_width'].values[0]
             counts = str_to_list(data['counts'].values[0])
-        except IndexError:
+        except IndexError:  # in case data is saved as np.array
             bin_centers = str_to_list(data['bin_centers'].values[0])
             bin_width = data['bin_width'].values[0]
             counts = str_to_list(data['counts'].values[0])
