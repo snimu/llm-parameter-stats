@@ -2,6 +2,7 @@
 
 import ast
 import os 
+from collections.abc import Sequence
 
 import pandas as pd 
 import numpy as np
@@ -93,17 +94,42 @@ def histogram_video(df: pd.DataFrame, model_size: str, parameter: str) -> None:
 
 
 @beartype
-def analyze_model(model_size: str) -> None:
-    df_hist = pd.read_csv(f"results/pythia-{model_size}/histogram.csv")
-    df_intra_parameter = pd.read_csv(f"results/pythia-{model_size}/intra_parameter.csv")
-    df_inter_parameter = pd.read_csv(f"results/pythia-{model_size}/inter_parameter.csv")
+def plot_results(
+        dfs: Sequence[pd.DataFrame], 
+        model_sizes: Sequence[str], 
+        intra: bool,
+        show: bool = True,
+) -> None:
+    keys = dfs[0].keys()
 
-    # Create video of histogram
-    histogram_video(df_hist, model_size, "all_parameters")
+    for key in keys:
+        if key in ("parameter", "step", "step_next"):
+            continue
+        for df, model_size in zip(dfs, model_sizes):
+            df = df[df['parameter'] == "all_parameters"]
+            plt.plot(df['step'], df[key], label=model_size)
+        
+        plt.xlabel("Step")
+        plt.ylabel(key)
+
+        title = "Intra-parameter" if intra else "Inter-parameter"
+        title = f"{key} ({title})"
+        plt.title(title)
+        plt.legend()
+
+        if show:
+            plt.show()
+        else:
+            subdir = 'intra_parameter' if intra else 'inter_parameter'
+            os.makedirs(f"results/pythia-{model_size}/{subdir}", exist_ok=True)
+            plt.savefig(f"results/pythia-{model_size}/{subdir}/{key}.png", dpi=300)
+        plt.cla()
+        plt.clf()
+        plt.close()
 
 
-@beartype 
-def analyze_all() -> None:
+@beartype
+def analyze_models(show: bool = True) -> None:
     model_sizes = [
         "70m", "70m-deduped",
         # "160m", "160m-deduped",
@@ -114,9 +140,24 @@ def analyze_all() -> None:
         # "6.9b", "6.9b-deduped",
         # "12b", "12b-deduped",
     ]
+
+    dfs_hist = []
+    dfs_intra_parameter = []
+    dfs_inter_parameter = []
     for model_size in model_sizes:
-        analyze_model(model_size)
+        dfs_hist.append(pd.read_csv(f"results/pythia-{model_size}/histogram.csv"))
+        dfs_intra_parameter.append(pd.read_csv(f"results/pythia-{model_size}/intra_parameter.csv"))
+        dfs_inter_parameter.append(pd.read_csv(f"results/pythia-{model_size}/inter_parameter.csv"))
+
+    # Create video of histogram
+    # for model_size in model_sizes:
+        # histogram_video(dfs_hist[model_size], model_size, "all_parameters")
+
+    # Plot results
+    plot_results(dfs_intra_parameter, model_sizes, intra=True, show=show)
+    plot_results(dfs_inter_parameter, model_sizes, intra=False, show=show)
 
 
 if __name__ == "__main__":
-    analyze_all()
+    analyze_models()
+
