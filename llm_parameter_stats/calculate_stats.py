@@ -32,6 +32,32 @@ def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
     return x.detach().cpu().numpy()
 
 
+@beartype
+def calculate_sparsity(
+        tensor: torch.Tensor | nn.Parameter, 
+        threshold: float = 0.0
+) -> float:
+    """
+    Calculate the sparsity of a tensor.
+
+    Parameters:
+    tensor (torch.Tensor | nn.Parameter): The input tensor.
+    threshold (float): Values below this threshold are considered sparse. Default is 0.0.
+
+    Returns:
+    float: The sparsity of the tensor.
+    """
+    # By default, the sparsity is calculated based on zero values.
+    if threshold == 0:
+        sparse_elements = torch.sum(tensor == 0).item()
+    else:
+        sparse_elements = torch.sum(torch.abs(tensor) < threshold).item()
+
+    total_elements = tensor.numel()
+    sparsity = sparse_elements / total_elements
+    return sparsity
+
+
 @beartype 
 def add_parameter_statistics(
         results: dict[str, torch.Tensor],
@@ -42,10 +68,14 @@ def add_parameter_statistics(
     results["parameter"].append(name)
     results["step"].append(step)
 
+    # Calculate standard statistics
     results["mean"].append(to_python(parameter.mean()))
     results["std"].append(to_python(parameter.std()))
     results["maximum"].append(to_python(torch.max(parameter)))
     results["minimum"].append(to_python(parameter.min()))
+
+    # The same for the absolute values
+    #   This is useful for finding the skewness of the distribution.
     results["abs_mean"].append(to_python(parameter.abs().mean()))
     results["abs_std"].append(to_python(parameter.abs().std()))
     results["abs_maximum"].append(to_python(parameter.abs().max()))
@@ -57,6 +87,19 @@ def add_parameter_statistics(
     results["ninety_percentile"].append(np.quantile(to_numpy(parameter), 0.9).tolist())
     results["ninety_five_percentile"].append(np.quantile(to_numpy(parameter), 0.95).tolist())
     results["ninety_nine_percentile"].append(np.quantile(to_numpy(parameter), 0.99).tolist())
+
+    # Calculate the sparsity
+    results["sparsity_0"].append(calculate_sparsity(parameter, 0))
+    results["sparsity_1e-6"].append(calculate_sparsity(parameter, 1e-6))
+    results["sparsity_1e-5"].append(calculate_sparsity(parameter, 1e-5))
+    results["sparsity_1e-4"].append(calculate_sparsity(parameter, 1e-4))
+    results["sparsity_1e-3"].append(calculate_sparsity(parameter, 1e-3))
+    results["sparsity_1e-2"].append(calculate_sparsity(parameter, 1e-2))
+    results["sparsity_1e-1"].append(calculate_sparsity(parameter, 1e-1))
+
+    # Calculate the L1 and L2 norms
+    results["L1"].append(to_python(parameter.norm(1)))
+    results["L2"].append(to_python(parameter.norm(2)))
 
     return results
 
@@ -142,6 +185,15 @@ def main() -> None:
             "ninety_percentile": [],
             "ninety_five_percentile": [],
             "ninety_nine_percentile": [],
+            "sparsity_0": [],
+            "sparsity_1e-6": [],
+            "sparsity_1e-5": [],
+            "sparsity_1e-4": [],
+            "sparsity_1e-3": [],
+            "sparsity_1e-2": [],
+            "sparsity_1e-1": [],
+            "L1": [],
+            "L2": [],
         }
 
         results_histogram = {
