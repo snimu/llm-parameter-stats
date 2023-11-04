@@ -17,7 +17,7 @@ NUM_HISTOGRAM_BINS = 100
 
 @beartype
 def tolist(x: torch.Tensor | nn.Parameter) -> list[float]:
-    return x.detach().cpu().numpy().tolist()
+    return x.detach().cpu().tolist()
 
 
 @beartype 
