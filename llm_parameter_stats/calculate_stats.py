@@ -254,6 +254,18 @@ def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
 
 
 @beartype
+def get_title(model_size: str) -> str:
+    title = "| ANALYZING NEW MODEL SIZE |"
+    width = len(title)
+    title = f"\n\n{'=' * width}\n{title}\n{'-' * width}\n"
+
+    size = f"| Size: {model_size} "
+    spaces = " " * (width - len(size) - 1)
+    title += f"{size}{spaces}|\n{'=' * width}\n\n"
+    return title
+
+
+@beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
@@ -262,15 +274,8 @@ def main() -> None:
     model_sizes = ["70m"]#, "70m-deduped"]  # MODEL_SIZES
 
     for model_size in model_sizes:
-        title = "| ANALYZING NEW MODEL SIZE |"
-        width = len(title)
-        title = f"\n\n{'=' * width}\n{title}\n{'=' * width}\n"
-        title += f"| Size: {model_size} |\n\n"
-
-        print(title)
-
+        print(get_title(model_size))
         results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
-
         model_n = model_n_next = None
 
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
