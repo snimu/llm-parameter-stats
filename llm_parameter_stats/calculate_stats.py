@@ -173,6 +173,16 @@ def add_histogram(
 
 
 @beartype
+def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
+    model = GPTNeoXForCausalLM.from_pretrained(
+        f"EleutherAI/pythia-{model_size}",
+        revision=f"step{step}",
+        cache_dir=cache_dir,
+    )
+    return model
+
+
+@beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
@@ -249,6 +259,8 @@ def main() -> None:
             "max_abs_change": [],
         }
 
+        model_n = model_n_next = None
+
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)-1}\n")
 
@@ -256,20 +268,8 @@ def main() -> None:
             cache_dir = f"models/pythia-{model_size}/step{step_n_next}"
 
             # Load the models
-            if step_n == 0:
-                model_n = GPTNeoXForCausalLM.from_pretrained(
-                    f"EleutherAI/pythia-{model_size}",
-                    revision=f"step{step_n}",
-                    cache_dir=cache_dir_last,
-                )
-            else:
-                model_n = model_n_next
-
-            model_n_next = GPTNeoXForCausalLM.from_pretrained(
-                f"EleutherAI/pythia-{model_size}",
-                revision=f"step{step_n_next}",
-                cache_dir=cache_dir,
-            )
+            model_n = load_model(model_size, step_n, cache_dir_last) if step_n == 0 else model_n_next
+            model_n_next = load_model(model_size, step_n_next, cache_dir)
 
             all_parameter_values = torch.tensor([])
             all_parameter_values_next = torch.tensor([])
