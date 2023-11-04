@@ -177,7 +177,7 @@ def add_histogram(
     
     results["parameter"].append(name)
     results["step"].append(step)
-    results["counts"].append(topython(counts))
+    results["counts"].append(to_python(counts))
     results["bin_centers"].append(to_python(bin_centers))
     results["bin_width"].append(bin_width.item())
 
