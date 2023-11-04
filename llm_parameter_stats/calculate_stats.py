@@ -157,7 +157,11 @@ def add_inter_parameter_statistics(
     delta = parameter_now - parameter_before
     results["l1_change"].append(to_python(delta.norm(1)))
     results["l2_change"].append(to_python(delta.norm(2)))
-    results["realtive_change"].append(to_python(delta.norm(2) / parameter_before.norm(2)))
+    results["realtive_change"].append(
+        to_python(delta.norm(2) / parameter_before.norm(2)) 
+        if parameter_before.norm(2) != 0 
+        else 0.0
+    )
     results["mean_squared_change"].append(to_python(torch.mean(delta ** 2)))
     results["max_abs_change"].append(to_python(torch.max(delta.abs())))
 
