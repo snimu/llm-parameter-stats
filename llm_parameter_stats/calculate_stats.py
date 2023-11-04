@@ -21,22 +21,37 @@ def add_parameter_statistics(
         parameter: nn.Parameter | torch.Tensor,
         name: str, 
         step: int,
-        step_next: int | None = None,
 ) -> dict[str, torch.Tensor]:
     results["parameter"].append(name)
     results["step"].append(step)
-    if step_next is not None:
-        results["step_next"].append(step_next)
 
-    prefix = "" if step_next is None else "cos_sim_"
-    results[f"{prefix}mean"].append(torch.mean(parameter).detach().cpu().numpy())
-    results[f"{prefix}std"].append(torch.std(parameter).detach().cpu().numpy())
-    results[f"{prefix}maximum"].append(torch.max(parameter).detach().cpu().numpy())
-    results[f"{prefix}minimum"].append(torch.min(parameter).detach().cpu().numpy())
-    results[f"{prefix}abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy())
-    results[f"{prefix}abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy())
-    results[f"{prefix}abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy())
-    results[f"{prefix}abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy())
+    results["mean"].append(torch.mean(parameter).detach().cpu().numpy())
+    results["std"].append(torch.std(parameter).detach().cpu().numpy())
+    results["maximum"].append(torch.max(parameter).detach().cpu().numpy())
+    results["minimum"].append(torch.min(parameter).detach().cpu().numpy())
+    results["abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy())
+    results["abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy())
+    results["abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy())
+    results["abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy())
+    return results
+
+
+@beartype
+def add_inter_parameter_statistics(
+        results: dict[str, torch.Tensor],
+        parameter_1: nn.Parameter | torch.Tensor,
+        parameter_2: nn.Parameter | torch.Tensor,
+        name: str,
+        step_1: int,
+        step_2: int,
+) -> dict[str, torch.Tensor]:
+    results["parameter"].append(name)
+    results["step"].append(step_1)
+    results["step_next"].append(step_2)
+
+    cos_sim = torch.nn.functional.cosine_similarity(parameter_1.flatten(), parameter_2.flatten(), dim=0)
+    results["cos_sim"].append(cos_sim.detach().cpu().numpy())
+
     return results
 
 
@@ -111,14 +126,7 @@ def main() -> None:
             "parameter": [],
             "step": [],
             "step_next": [],
-            "cos_sim_mean": [],
-            "cos_sim_std": [],
-            "cos_sim_maximum": [],
-            "cos_sim_minimum": [],
-            "cos_sim_abs_mean": [],
-            "cos_sim_abs_std": [],
-            "cos_sim_abs_maximum": [],
-            "cos_sim_abs_minimum": [],
+            "cos_sim": [],
         }
 
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
@@ -164,11 +172,9 @@ def main() -> None:
                     results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
 
                 # Inter-parameter statistics
-                cos_sim = torch.nn.functional.cosine_similarity(
-                    parameter_n.flatten(), parameter_n_next.flatten(), dim=0
+                results_inter_parameter = add_inter_parameter_statistics(
+                    results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n, step_n_next
                 )
-
-                results_inter_parameter = add_parameter_statistics(results_inter_parameter, cos_sim, name_n, step_n, step_n_next)
 
                 # Free up GPU memory
                 parameter_n = parameter_n.cpu()
@@ -181,10 +187,9 @@ def main() -> None:
                 results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next)
                 results_histogram = add_histogram(results_histogram, all_parameter_values_next, "all_parameters", step_n_next)
             else:
-                cos_sim = torch.nn.functional.cosine_similarity(
-                    all_parameter_values, all_parameter_values_next, dim=0
+                results_inter_parameter = add_inter_parameter_statistics(
+                    results_inter_parameter, all_parameter_values, all_parameter_values_next, "all_parameters", step_n, step_n_next
                 )
-                results_inter_parameter = add_parameter_statistics(results_inter_parameter, cos_sim, "all_parameters", step_n, step_n_next)
 
             # Free up storage
             shutil.rmtree(cache_dir_last)
