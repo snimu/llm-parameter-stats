@@ -103,7 +103,7 @@ def add_intra_parameter_statistics(
     # Calculate standard statistics
     results["mean"].append(to_python(parameter.mean()))
     results["median"].append(to_python(parameter.median()))
-    results["mode"].append(to_python(parameter.mode().values))
+    results["mode"].append(to_python(parameter.flatten().mode().values))
     results["std"].append(to_python(parameter.std()))
     results["skewness"].append(skewness(parameter))
     results["kurtosis"].append(kurtosis(parameter))
