@@ -8,6 +8,7 @@ from beartype import beartype
 import torch
 from torch import nn
 import pandas as pd
+import numpy as np
 from transformers import GPTNeoXForCausalLM
 
 
@@ -16,8 +17,19 @@ NUM_HISTOGRAM_BINS = 100
 
 
 @beartype
-def tolist(x: torch.Tensor | nn.Parameter) -> list[float]:
+def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
+    if isinstance(x, float):
+        return x
+    if x.numel() == 1:
+        return x.item()
     return x.detach().cpu().tolist()
+
+
+@beartype
+def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
+    if isinstance(x, float):
+        return np.array(x)
+    return x.detach().cpu().numpy()
 
 
 @beartype 
@@ -30,26 +42,22 @@ def add_parameter_statistics(
     results["parameter"].append(name)
     results["step"].append(step)
 
-    results["mean"].append(tolist(parameter.mean()))
-    results["std"].append(tolist(parameter.std()))
-    results["maximum"].append(tolist(torch.max(parameter)))
-    results["minimum"].append(tolist(parameter.min()))
-    results["abs_mean"].append(tolist(parameter.abs().mean()))
-    results["abs_std"].append(tolist(parameter.abs().std()))
-    results["abs_maximum"].append(tolist(parameter.abs().max()))
-    results["abs_minimum"].append(tolist(parameter.abs().min()))
-    results["eighty_percentile"].append(tolist(parameter.quantile(0.8)))
-    results["ninety_percentile"].append(tolist(parameter.quantile(0.9)))
-    results["ninety_five_percentile"].append(tolist(parameter.quantile(0.95)))
-    results["ninety_nine_percentile"].append(tolist(parameter.quantile(0.99)))
+    results["mean"].append(to_python(parameter.mean()))
+    results["std"].append(to_python(parameter.std()))
+    results["maximum"].append(to_python(torch.max(parameter)))
+    results["minimum"].append(to_python(parameter.min()))
+    results["abs_mean"].append(to_python(parameter.abs().mean()))
+    results["abs_std"].append(to_python(parameter.abs().std()))
+    results["abs_maximum"].append(to_python(parameter.abs().max()))
+    results["abs_minimum"].append(to_python(parameter.abs().min()))
 
-    if parameter.ndim > 1:
-        eig = torch.linalg.eig(parameter)
-        results["eigenvalues"].append(eig.eigenvalues.detach().cpu().numpy().tolist())
-        # results["eigenvectors"].append(eig.eigenvectors.detach().cpu().numpy().tolist())
-    else:
-        results["eigenvalues"].append(None)
-        # results["eigenvectors"].append(None)
+    # Calculate the percentiles. 
+    #  Unfortunately, torch cannot handle large tensors, so use numpy instead.
+    results["eighty_percentile"].append(np.quantile(to_numpy(parameter), 0.8).tolist())
+    results["ninety_percentile"].append(np.quantile(to_numpy(parameter), 0.9).tolist())
+    results["ninety_five_percentile"].append(np.quantile(to_numpy(parameter), 0.95).tolist())
+    results["ninety_nine_percentile"].append(np.quantile(to_numpy(parameter), 0.99).tolist())
+
     return results
 
 
@@ -107,8 +115,9 @@ def main() -> None:
     #     "6.9b", "6.9b-deduped",
     #     "12b", "12b-deduped",
     # ]
-    steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
-    model_sizes = ["70m", "70m-deduped"]
+    # steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+    steps = [0, 1, 2]
+    model_sizes = ["70m"]#, "70m-deduped"]
 
     for model_size in model_sizes:
         title = "| ANALYZING NEW MODEL SIZE |"
@@ -133,8 +142,6 @@ def main() -> None:
             "ninety_percentile": [],
             "ninety_five_percentile": [],
             "ninety_nine_percentile": [],
-            "eigenvalues": [],
-            # "eigenvectors": [],
         }
 
         results_histogram = {
