@@ -58,6 +58,24 @@ def calculate_sparsity(
     return sparsity
 
 
+@beartype
+def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
+    tensor = tensor.flatten().float()
+    mean = torch.mean(tensor)
+    std = torch.std(tensor)
+    skewness = torch.mean((tensor - mean) ** 3) / std ** 3
+    return skewness
+
+
+@beartype
+def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
+    tensor = tensor.flatten().float()
+    mean = torch.mean(tensor)
+    std = torch.std(tensor)
+    kurtosis = torch.mean((tensor - mean) ** 4) / std ** 4 - 3
+    return kurtosis
+
+
 @beartype 
 def add_parameter_statistics(
         results: dict[str, torch.Tensor],
@@ -70,7 +88,11 @@ def add_parameter_statistics(
 
     # Calculate standard statistics
     results["mean"].append(to_python(parameter.mean()))
+    results["median"].append(to_python(parameter.median()))
+    results["mode"].append(to_python(parameter.mode()))
     results["std"].append(to_python(parameter.std()))
+    results["skewness"].append(skewness(parameter))
+    results["kurtosis"].append(kurtosis(parameter))
     results["maximum"].append(to_python(torch.max(parameter)))
     results["minimum"].append(to_python(parameter.min()))
 
@@ -107,8 +129,8 @@ def add_parameter_statistics(
 @beartype
 def add_inter_parameter_statistics(
         results: dict[str, torch.Tensor],
-        parameter_1: nn.Parameter | torch.Tensor,
-        parameter_2: nn.Parameter | torch.Tensor,
+        parameter_now: nn.Parameter | torch.Tensor,
+        parameter_before: nn.Parameter | torch.Tensor,
         name: str,
         step_1: int,
         step_2: int,
@@ -117,8 +139,15 @@ def add_inter_parameter_statistics(
     results["step"].append(step_1)
     results["step_next"].append(step_2)
 
-    cos_sim = torch.nn.functional.cosine_similarity(parameter_1.flatten(), parameter_2.flatten(), dim=0)
+    cos_sim = torch.nn.functional.cosine_similarity(parameter_now.flatten(), parameter_before.flatten(), dim=0)
     results["cos_sim"].append(cos_sim.detach().cpu().numpy())
+
+    delta = parameter_now - parameter_before
+    results["l1_change"].append(to_python(delta.norm(1)))
+    results["l2_change"].append(to_python(delta.norm(2)))
+    results["realtive_change"].append(to_python(delta.norm(2) / parameter_before.norm(2)))
+    results["mean_squared_change"].append(to_python(torch.mean(delta ** 2)))
+    results["max_abs_change"].append(to_python(torch.max(delta.abs())))
 
     return results
 
@@ -174,7 +203,11 @@ def main() -> None:
             "parameter": [],
             "step": [],
             "mean": [],
+            "median": [],
+            "mode": [],
             "std": [],
+            "skewness": [],
+            "kurtosis": [],
             "maximum": [],
             "minimum": [],
             "abs_mean": [],
@@ -209,6 +242,11 @@ def main() -> None:
             "step": [],
             "step_next": [],
             "cos_sim": [],
+            "l1_change": [],
+            "l2_change": [],
+            "realtive_change": [],
+            "mean_squared_change": [],
+            "max_abs_change": [],
         }
 
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
