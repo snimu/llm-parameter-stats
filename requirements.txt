@@ -7,4 +7,3 @@ einops
 jaxtyping
 tqdm
 matplotlib
-scipy
