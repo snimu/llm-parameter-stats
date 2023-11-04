@@ -15,6 +15,11 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
 
+@beartype
+def tolist(x: torch.Tensor | nn.Parameter) -> list[float]:
+    return x.detach().cpu().numpy().tolist()
+
+
 @beartype 
 def add_parameter_statistics(
         results: dict[str, torch.Tensor],
@@ -25,18 +30,18 @@ def add_parameter_statistics(
     results["parameter"].append(name)
     results["step"].append(step)
 
-    results["mean"].append(torch.mean(parameter).detach().cpu().numpy().tolist())
-    results["std"].append(torch.std(parameter).detach().cpu().numpy().tolist())
-    results["maximum"].append(torch.max(parameter).detach().cpu().numpy().tolist())
-    results["minimum"].append(torch.min(parameter).detach().cpu().numpy().tolist())
-    results["abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy().tolist())
-    results["abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy().tolist())
-    results["abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy().tolist())
-    results["abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy().tolist())
-    results["eighty_percentile"].append(torch.quantile(parameter, 0.8).detach().cpu().numpy().tolist())
-    results["ninety_percentile"].append(torch.quantile(parameter, 0.9).detach().cpu().numpy().tolist())
-    results["ninety_five_percentile"].append(torch.quantile(parameter, 0.95).detach().cpu().numpy().tolist())
-    results["ninety_nine_percentile"].append(torch.quantile(parameter, 0.99).detach().cpu().numpy().tolist())
+    results["mean"].append(tolist(parameter.mean()))
+    results["std"].append(tolist(parameter.std()))
+    results["maximum"].append(tolist(torch.max(parameter)))
+    results["minimum"].append(tolist(parameter.min()))
+    results["abs_mean"].append(tolist(parameter.abs().mean()))
+    results["abs_std"].append(tolist(parameter.abs().std()))
+    results["abs_maximum"].append(tolist(parameter.abs().max()))
+    results["abs_minimum"].append(tolist(parameter.abs().min()))
+    results["eighty_percentile"].append(tolist(parameter.quantile(0.8)))
+    results["ninety_percentile"].append(tolist(parameter.quantile(0.9)))
+    results["ninety_five_percentile"].append(tolist(parameter.quantile(0.95)))
+    results["ninety_nine_percentile"].append(tolist(parameter.quantile(0.99)))
 
     if parameter.ndim > 1:
         eig = torch.linalg.eig(parameter)
