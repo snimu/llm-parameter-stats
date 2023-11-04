@@ -25,7 +25,9 @@ MODEL_SIZES = [
         "6.9b", "6.9b-deduped",
         "12b", "12b-deduped",
     ]
-STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+FIRST_STEPS = [0] + [2**i for i in range(10)] 
+LAST_STEPS = [i * 1000 for i in range(1, 144)]
+STEPS = FIRST_STEPS + LAST_STEPS
 
 
 @beartype
@@ -89,7 +91,7 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
 
 
 @beartype 
-def add_parameter_statistics(
+def add_intra_parameter_statistics(
         results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
         name: str, 
@@ -142,24 +144,24 @@ def add_parameter_statistics(
 def add_inter_parameter_statistics(
         results: dict[str, str | float],
         parameter_now: nn.Parameter | torch.Tensor,
-        parameter_before: nn.Parameter | torch.Tensor,
+        parameter_last: nn.Parameter | torch.Tensor,
         name: str,
-        step_1: int,
-        step_2: int,
+        step_last: int,
+        step_now: int,
 ) -> dict[str, str | float]:
     results["parameter"].append(name)
-    results["step"].append(step_1)
-    results["step_next"].append(step_2)
+    results["step"].append(step_last)
+    results["step_next"].append(step_now)
 
-    cos_sim = torch.nn.functional.cosine_similarity(parameter_now.flatten(), parameter_before.flatten(), dim=0)
+    cos_sim = torch.nn.functional.cosine_similarity(parameter_now.flatten(), parameter_last.flatten(), dim=0)
     results["cos_sim"].append(cos_sim.detach().cpu().numpy())
 
-    delta = parameter_now - parameter_before
+    delta = parameter_now - parameter_last
     results["l1_change"].append(to_python(delta.norm(1)))
     results["l2_change"].append(to_python(delta.norm(2)))
     results["realtive_change"].append(
-        to_python(delta.norm(2) / parameter_before.norm(2)) 
-        if parameter_before.norm(2) != 0 
+        to_python(delta.norm(2) / parameter_last.norm(2)) 
+        if parameter_last.norm(2) != 0 
         else 0.0
     )
     results["mean_squared_change"].append(to_python(torch.mean(delta ** 2)))
@@ -300,12 +302,12 @@ def main() -> None:
                 parameter_n_next = parameter_n_next.to(DEVICE)
 
                 # Intra-parameter statistics
-                results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
+                results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
                 all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
                 all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
                 results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
                 if step_n_next == steps[-1]:
-                    results_intra_parameter = add_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
+                    results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
                     results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
 
                 # Inter-parameter statistics
@@ -318,14 +320,17 @@ def main() -> None:
                 parameter_n_next = parameter_n_next.cpu()
 
             # Add data for all parameters
-            results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
+            results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
             results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
+            results_inter_parameter = add_inter_parameter_statistics(
+                results_inter_parameter, all_parameter_values, all_parameter_values_next, "all_parameters", step_n, step_n_next
+            )
             if step_n_next == steps[-1]:
-                results_intra_parameter = add_parameter_statistics(results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next)
-                results_histogram = add_histogram(results_histogram, all_parameter_values_next, "all_parameters", step_n_next)
-            else:
-                results_inter_parameter = add_inter_parameter_statistics(
-                    results_inter_parameter, all_parameter_values, all_parameter_values_next, "all_parameters", step_n, step_n_next
+                results_intra_parameter = add_intra_parameter_statistics(
+                    results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next
+                )
+                results_histogram = add_histogram(
+                    results_histogram, all_parameter_values_next, "all_parameters", step_n_next
                 )
 
             # Free up storage
@@ -334,7 +339,58 @@ def main() -> None:
         # Free up more memory
         shutil.rmtree(cache_dir)
 
-        # TODO: calculate intra-parameter statistics for steps of 10_000 instead of 1000
+        # Calculate inter-parameter statistics in 10_000 step-intervals
+        print("\n\nCalculating inter-parameter statistics in 10_000 step-intervals\n")
+        steps = [10_000, 20_000]  # STEPS_LAST
+        for step in steps:
+            if step < 10_000:
+                continue
+
+            step_last = step - 10_000
+
+            cache_dir_last = f"models/pythia-{model_size}/step{step_last}"
+            cache_dir = f"models/pythia-{model_size}/step{step}"
+
+            # Load the models
+            model_last = load_model(model_size, step_last, cache_dir_last)
+            model = load_model(model_size, step, cache_dir)
+
+            all_parameter_values = torch.tensor([])
+            all_parameter_values_last = torch.tensor([])
+
+            # Calculate the statistics
+            for (name_last, parameter_last), (name, parameter) in zip(
+                model_last.named_parameters(), model.named_parameters()
+            ):
+                # Speed up by moving to GPU if available
+                parameter_last = parameter_last.to(DEVICE)
+                parameter = parameter.to(DEVICE)
+
+                all_parameter_values = torch.cat((all_parameter_values, parameter.flatten()))
+                all_parameter_values_last = torch.cat((all_parameter_values_last, parameter_last.flatten()))
+
+                # Inter-parameter statistics
+                results_inter_parameter = add_inter_parameter_statistics(
+                    results_inter_parameter, parameter_last, parameter, name, step_last, step
+                )
+
+                # Free up GPU memory
+                parameter_last = parameter_last.cpu()
+                parameter = parameter.cpu()
+
+            # Add data for all parameters
+            results_inter_parameter = add_inter_parameter_statistics(
+                results=results_inter_parameter, 
+                parameter_now=all_parameter_values, 
+                parameter_last=all_parameter_values_last, 
+                name="all_parameters", 
+                step_last=step_last, 
+                step_now=step,
+            )
+
+            # Free up storage
+            shutil.rmtree(cache_dir_last)
+            shutil.rmtree(cache_dir)
         
         # Save the results
         os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
