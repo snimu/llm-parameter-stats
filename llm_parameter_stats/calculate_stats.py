@@ -90,11 +90,11 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
 
 @beartype 
 def add_parameter_statistics(
-        results: dict[str, torch.Tensor],
+        results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
         name: str, 
         step: int,
-) -> dict[str, torch.Tensor]:
+) -> dict[str, str | float]:
     results["parameter"].append(name)
     results["step"].append(step)
 
@@ -140,13 +140,13 @@ def add_parameter_statistics(
 
 @beartype
 def add_inter_parameter_statistics(
-        results: dict[str, torch.Tensor],
+        results: dict[str, str | float],
         parameter_now: nn.Parameter | torch.Tensor,
         parameter_before: nn.Parameter | torch.Tensor,
         name: str,
         step_1: int,
         step_2: int,
-) -> dict[str, torch.Tensor]:
+) -> dict[str, str | float]:
     results["parameter"].append(name)
     results["step"].append(step_1)
     results["step_next"].append(step_2)
@@ -166,19 +166,19 @@ def add_inter_parameter_statistics(
 
 @beartype
 def add_histogram(
-        results: dict[str, torch.Tensor],
+        results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
         name: str,
         step: int,
-) -> dict[str, torch.Tensor]:
+) -> dict[str, str | float]:
     counts, bin_edges = torch.histogram(parameter, bins=NUM_HISTOGRAM_BINS)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
     
     results["parameter"].append(name)
     results["step"].append(step)
-    results["counts"].append(list(counts.detach().cpu().numpy()))
-    results["bin_centers"].append(list(bin_centers.detach().cpu().numpy()))
+    results["counts"].append(topython(counts))
+    results["bin_centers"].append(to_python(bin_centers))
     results["bin_width"].append(bin_width.item())
 
     return results
