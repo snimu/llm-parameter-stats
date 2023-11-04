@@ -25,14 +25,26 @@ def add_parameter_statistics(
     results["parameter"].append(name)
     results["step"].append(step)
 
-    results["mean"].append(torch.mean(parameter).detach().cpu().numpy())
-    results["std"].append(torch.std(parameter).detach().cpu().numpy())
-    results["maximum"].append(torch.max(parameter).detach().cpu().numpy())
-    results["minimum"].append(torch.min(parameter).detach().cpu().numpy())
-    results["abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy())
-    results["abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy())
-    results["abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy())
-    results["abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy())
+    results["mean"].append(torch.mean(parameter).detach().cpu().numpy().tolist())
+    results["std"].append(torch.std(parameter).detach().cpu().numpy().tolist())
+    results["maximum"].append(torch.max(parameter).detach().cpu().numpy().tolist())
+    results["minimum"].append(torch.min(parameter).detach().cpu().numpy().tolist())
+    results["abs_mean"].append(torch.mean(torch.abs(parameter)).detach().cpu().numpy().tolist())
+    results["abs_std"].append(torch.std(torch.abs(parameter)).detach().cpu().numpy().tolist())
+    results["abs_maximum"].append(torch.max(torch.abs(parameter)).detach().cpu().numpy().tolist())
+    results["abs_minimum"].append(torch.min(torch.abs(parameter)).detach().cpu().numpy().tolist())
+    results["eighty_percentile"].append(torch.quantile(parameter, 0.8).detach().cpu().numpy().tolist())
+    results["ninety_percentile"].append(torch.quantile(parameter, 0.9).detach().cpu().numpy().tolist())
+    results["ninety_five_percentile"].append(torch.quantile(parameter, 0.95).detach().cpu().numpy().tolist())
+    results["ninety_nine_percentile"].append(torch.quantile(parameter, 0.99).detach().cpu().numpy().tolist())
+
+    if parameter.ndim > 1:
+        eig = torch.linalg.eig(parameter)
+        results["eigenvalues"].append(eig.eigenvalues.detach().cpu().numpy().tolist())
+        # results["eigenvectors"].append(eig.eigenvectors.detach().cpu().numpy().tolist())
+    else:
+        results["eigenvalues"].append(None)
+        # results["eigenvectors"].append(None)
     return results
 
 
@@ -112,6 +124,12 @@ def main() -> None:
             "abs_std": [],
             "abs_maximum": [],
             "abs_minimum": [],
+            "eighty_percentile": [],
+            "ninety_percentile": [],
+            "ninety_five_percentile": [],
+            "ninety_nine_percentile": [],
+            "eigenvalues": [],
+            # "eigenvectors": [],
         }
 
         results_histogram = {
