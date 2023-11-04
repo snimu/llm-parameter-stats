@@ -89,7 +89,7 @@ def add_parameter_statistics(
     results["ninety_nine_percentile"].append(np.quantile(to_numpy(parameter), 0.99).tolist())
 
     # Calculate the sparsity
-    results["sparsity_0"].append(calculate_sparsity(parameter, 0))
+    results["sparsity_0"].append(calculate_sparsity(parameter, 0.0))
     results["sparsity_1e-6"].append(calculate_sparsity(parameter, 1e-6))
     results["sparsity_1e-5"].append(calculate_sparsity(parameter, 1e-5))
     results["sparsity_1e-4"].append(calculate_sparsity(parameter, 1e-4))
