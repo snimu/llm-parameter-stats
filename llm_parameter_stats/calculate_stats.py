@@ -76,7 +76,7 @@ def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
     mean = torch.mean(tensor)
     std = torch.std(tensor)
     skewness = torch.mean((tensor - mean) ** 3) / std ** 3
-    return skewness
+    return skewness.item()
 
 
 @beartype
@@ -85,7 +85,7 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
     mean = torch.mean(tensor)
     std = torch.std(tensor)
     kurtosis = torch.mean((tensor - mean) ** 4) / std ** 4 - 3
-    return kurtosis
+    return kurtosis.item()
 
 
 @beartype 
@@ -101,7 +101,7 @@ def add_parameter_statistics(
     # Calculate standard statistics
     results["mean"].append(to_python(parameter.mean()))
     results["median"].append(to_python(parameter.median()))
-    results["mode"].append(to_python(parameter.mode()))
+    results["mode"].append(to_python(parameter.mode().values))
     results["std"].append(to_python(parameter.std()))
     results["skewness"].append(skewness(parameter))
     results["kurtosis"].append(kurtosis(parameter))
@@ -247,7 +247,6 @@ def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     }
 
     return results_intra_parameter, results_histogram, results_inter_parameter
-
 
 
 @beartype
