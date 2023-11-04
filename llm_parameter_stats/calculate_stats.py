@@ -333,6 +333,8 @@ def main() -> None:
 
         # Free up more memory
         shutil.rmtree(cache_dir)
+
+        # TODO: calculate intra-parameter statistics for steps of 10_000 instead of 1000
         
         # Save the results
         os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
