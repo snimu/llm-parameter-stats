@@ -15,6 +15,18 @@ from transformers import GPTNeoXForCausalLM
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
+MODEL_SIZES = [
+        "70m", "70m-deduped",
+        "160m", "160m-deduped",
+        "410m", "410m-deduped", 
+        "1b", "1b-deduped",
+        "1.4b", "1.4b-deduped",
+        "2.8b", "2.8b-deduped",
+        "6.9b", "6.9b-deduped",
+        "12b", "12b-deduped",
+    ]
+STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+
 
 @beartype
 def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
@@ -183,23 +195,68 @@ def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM
 
 
 @beartype
+def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
+    results_intra_parameter = {
+        "parameter": [],
+        "step": [],
+        "mean": [],
+        "median": [],
+        "mode": [],
+        "std": [],
+        "skewness": [],
+        "kurtosis": [],
+        "maximum": [],
+        "minimum": [],
+        "abs_mean": [],
+        "abs_std": [],
+        "abs_maximum": [],
+        "abs_minimum": [],
+        "eighty_percentile": [],
+        "ninety_percentile": [],
+        "ninety_five_percentile": [],
+        "ninety_nine_percentile": [],
+        "sparsity_0": [],
+        "sparsity_1e-6": [],
+        "sparsity_1e-5": [],
+        "sparsity_1e-4": [],
+        "sparsity_1e-3": [],
+        "sparsity_1e-2": [],
+        "sparsity_1e-1": [],
+        "L1": [],
+        "L2": [],
+    }
+
+    results_histogram = {
+        "parameter": [],
+        "step": [],
+        "counts": [],
+        "bin_centers": [],
+        "bin_width": [],
+    }
+
+    results_inter_parameter = {
+        "parameter": [],
+        "step": [],
+        "step_next": [],
+        "cos_sim": [],
+        "l1_change": [],
+        "l2_change": [],
+        "realtive_change": [],
+        "mean_squared_change": [],
+        "max_abs_change": [],
+    }
+
+    return results_intra_parameter, results_histogram, results_inter_parameter
+
+
+
+@beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
 
-    # model_sizes = [
-    #     "70m", "70m-deduped",
-    #     "160m", "160m-deduped",
-    #     "410m", "410m-deduped", 
-    #     "1b", "1b-deduped",
-    #     "1.4b", "1.4b-deduped",
-    #     "2.8b", "2.8b-deduped",
-    #     "6.9b", "6.9b-deduped",
-    #     "12b", "12b-deduped",
-    # ]
-    # steps = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
-    steps = [0, 1, 2]
-    model_sizes = ["70m"]#, "70m-deduped"]
+    steps = [0, 1, 2]  # STEPS
+    model_sizes = ["70m"]#, "70m-deduped"]  # MODEL_SIZES
 
     for model_size in model_sizes:
         title = "| ANALYZING NEW MODEL SIZE |"
@@ -209,55 +266,7 @@ def main() -> None:
 
         print(title)
 
-        results_intra_parameter = {
-            "parameter": [],
-            "step": [],
-            "mean": [],
-            "median": [],
-            "mode": [],
-            "std": [],
-            "skewness": [],
-            "kurtosis": [],
-            "maximum": [],
-            "minimum": [],
-            "abs_mean": [],
-            "abs_std": [],
-            "abs_maximum": [],
-            "abs_minimum": [],
-            "eighty_percentile": [],
-            "ninety_percentile": [],
-            "ninety_five_percentile": [],
-            "ninety_nine_percentile": [],
-            "sparsity_0": [],
-            "sparsity_1e-6": [],
-            "sparsity_1e-5": [],
-            "sparsity_1e-4": [],
-            "sparsity_1e-3": [],
-            "sparsity_1e-2": [],
-            "sparsity_1e-1": [],
-            "L1": [],
-            "L2": [],
-        }
-
-        results_histogram = {
-            "parameter": [],
-            "step": [],
-            "counts": [],
-            "bin_centers": [],
-            "bin_width": [],
-        }
-
-        results_inter_parameter = {
-            "parameter": [],
-            "step": [],
-            "step_next": [],
-            "cos_sim": [],
-            "l1_change": [],
-            "l2_change": [],
-            "realtive_change": [],
-            "mean_squared_change": [],
-            "max_abs_change": [],
-        }
+        results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
 
         model_n = model_n_next = None
 
