@@ -121,8 +121,8 @@ def plot_results(
             plt.show()
         else:
             subdir = 'intra_parameter' if intra else 'inter_parameter'
-            os.makedirs(f"results/pythia-{model_size}/{subdir}", exist_ok=True)
-            plt.savefig(f"results/pythia-{model_size}/{subdir}/{key}.png", dpi=300)
+            os.makedirs(f"results/all/{subdir}", exist_ok=True)  # TODO: think of more consistent naming for dirs
+            plt.savefig(f"results/all/{subdir}/{key}.png", dpi=300)
         plt.cla()
         plt.clf()
         plt.close()
@@ -159,5 +159,5 @@ def analyze_models(show: bool = True) -> None:
 
 
 if __name__ == "__main__":
-    analyze_models()
+    analyze_models(show=False)
 
