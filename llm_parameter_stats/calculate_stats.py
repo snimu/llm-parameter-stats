@@ -12,6 +12,10 @@ import numpy as np
 from transformers import GPTNeoXForCausalLM
 
 
+#####################
+# --- CONSTANTS --- #
+#####################
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
@@ -30,6 +34,10 @@ LAST_STEPS = [i * 1000 for i in range(1, 144)]
 STEPS = FIRST_STEPS + LAST_STEPS
 
 
+###################
+# --- HELPERS --- #
+###################
+
 @beartype
 def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
     if isinstance(x, float):
@@ -45,6 +53,87 @@ def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
         return np.array(x)
     return x.detach().cpu().numpy()
 
+
+@beartype
+def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
+    model = GPTNeoXForCausalLM.from_pretrained(
+        f"EleutherAI/pythia-{model_size}",
+        revision=f"step{step}",
+        cache_dir=cache_dir,
+    )
+    return model
+
+
+@beartype
+def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
+    results_intra_parameter = {
+        "parameter": [],
+        "step": [],
+        "mean": [],
+        "median": [],
+        "mode": [],
+        "std": [],
+        "skewness": [],
+        "kurtosis": [],
+        "maximum": [],
+        "minimum": [],
+        "abs_mean": [],
+        "abs_std": [],
+        "abs_maximum": [],
+        "abs_minimum": [],
+        "eighty_percentile": [],
+        "ninety_percentile": [],
+        "ninety_five_percentile": [],
+        "ninety_nine_percentile": [],
+        "sparsity_0": [],
+        "sparsity_1e-6": [],
+        "sparsity_1e-5": [],
+        "sparsity_1e-4": [],
+        "sparsity_1e-3": [],
+        "sparsity_1e-2": [],
+        "sparsity_1e-1": [],
+        "L1": [],
+        "L2": [],
+    }
+
+    results_histogram = {
+        "parameter": [],
+        "step": [],
+        "counts": [],
+        "bin_centers": [],
+        "bin_width": [],
+    }
+
+    results_inter_parameter = {
+        "parameter": [],
+        "step": [],
+        "step_next": [],
+        "cos_sim": [],
+        "l1_change": [],
+        "l2_change": [],
+        "realtive_change": [],
+        "mean_squared_change": [],
+        "max_abs_change": [],
+    }
+
+    return results_intra_parameter, results_histogram, results_inter_parameter
+
+
+@beartype
+def get_title(model_size: str) -> str:
+    title = "| ANALYZING NEW MODEL SIZE |"
+    width = len(title)
+    title = f"\n\n{'=' * width}\n{title}\n{'-' * width}\n"
+
+    size = f"| Size: {model_size} "
+    spaces = " " * (width - len(size) - 1)
+    title += f"{size}{spaces}|\n{'=' * width}\n\n"
+    return title
+
+
+######################
+# --- STATISTICS --- #
+######################
 
 @beartype
 def calculate_sparsity(
@@ -89,6 +178,10 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
     kurtosis = torch.mean((tensor - mean) ** 4) / std ** 4 - 3
     return kurtosis.item()
 
+
+#####################################
+# --- ADD STATISTICS TO RESULTS --- #
+#####################################
 
 @beartype 
 def add_intra_parameter_statistics(
@@ -190,82 +283,9 @@ def add_histogram(
     return results
 
 
-@beartype
-def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
-    model = GPTNeoXForCausalLM.from_pretrained(
-        f"EleutherAI/pythia-{model_size}",
-        revision=f"step{step}",
-        cache_dir=cache_dir,
-    )
-    return model
-
-
-@beartype
-def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
-    results_intra_parameter = {
-        "parameter": [],
-        "step": [],
-        "mean": [],
-        "median": [],
-        "mode": [],
-        "std": [],
-        "skewness": [],
-        "kurtosis": [],
-        "maximum": [],
-        "minimum": [],
-        "abs_mean": [],
-        "abs_std": [],
-        "abs_maximum": [],
-        "abs_minimum": [],
-        "eighty_percentile": [],
-        "ninety_percentile": [],
-        "ninety_five_percentile": [],
-        "ninety_nine_percentile": [],
-        "sparsity_0": [],
-        "sparsity_1e-6": [],
-        "sparsity_1e-5": [],
-        "sparsity_1e-4": [],
-        "sparsity_1e-3": [],
-        "sparsity_1e-2": [],
-        "sparsity_1e-1": [],
-        "L1": [],
-        "L2": [],
-    }
-
-    results_histogram = {
-        "parameter": [],
-        "step": [],
-        "counts": [],
-        "bin_centers": [],
-        "bin_width": [],
-    }
-
-    results_inter_parameter = {
-        "parameter": [],
-        "step": [],
-        "step_next": [],
-        "cos_sim": [],
-        "l1_change": [],
-        "l2_change": [],
-        "realtive_change": [],
-        "mean_squared_change": [],
-        "max_abs_change": [],
-    }
-
-    return results_intra_parameter, results_histogram, results_inter_parameter
-
-
-@beartype
-def get_title(model_size: str) -> str:
-    title = "| ANALYZING NEW MODEL SIZE |"
-    width = len(title)
-    title = f"\n\n{'=' * width}\n{title}\n{'-' * width}\n"
-
-    size = f"| Size: {model_size} "
-    spaces = " " * (width - len(size) - 1)
-    title += f"{size}{spaces}|\n{'=' * width}\n\n"
-    return title
-
+################
+# --- MAIN --- #
+################
 
 @beartype
 def main() -> None:
@@ -401,6 +421,10 @@ def main() -> None:
         df_inter_parameter.to_csv(f"results/pythia-{model_size}/inter_parameter.csv", index=False)
         df_histogram.to_csv(f"results/pythia-{model_size}/histogram.csv", index=False)
 
+
+#######################
+# --- LET'S GO!!! --- #
+#######################
 
 if __name__ == "__main__":
     main()
