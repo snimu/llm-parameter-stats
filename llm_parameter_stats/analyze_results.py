@@ -12,6 +12,34 @@ from beartype import beartype
 
 
 # STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+PYTHIA_BATCH_SIZE = 2e6  # 2 million
+
+
+@beartype
+def get_chinchilla_optimal_steps(
+        model_size: str,
+) -> int:
+    model_size = model_size.split("pythia-")[1]
+    if "m" in model_size: 
+        factor = 1e6
+    elif "b" in model_size:
+        factor = 1e9
+    else:
+        raise ValueError(f"Model size {model_size} not supported.")
+    model_size = int(model_size.split("m")[0]) * factor
+
+    num_samples_chinchilla_optimal = int(20 * model_size)
+    num_steps_chinchilla_optimal = int(num_samples_chinchilla_optimal / PYTHIA_BATCH_SIZE)
+    return num_steps_chinchilla_optimal
+
+
+@beartype
+def get_percentage_of_chinchilla_optimal(
+        model_size: str,
+        steps: Sequence[int],
+) -> np.ndarray:
+    num_steps_chinchilla_optimal = get_chinchilla_optimal_steps(model_size)
+    return np.array(steps) / num_steps_chinchilla_optimal
 
 
 @beartype
