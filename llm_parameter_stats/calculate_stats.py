@@ -296,7 +296,8 @@ def main() -> None:
     for model_size in model_sizes:
         print(get_title(model_size))
         results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
-        model_n = model_n_next = None
+        model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
+        model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
 
         for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)-1}\n")
@@ -351,11 +352,12 @@ def main() -> None:
 
         # Calculate inter-parameter statistics in 10_000 step-intervals
         print("\n\nCalculating inter-parameter statistics in 10_000 step-intervals\n")
-        steps = [10_000, 20_000]  # STEPS_LAST
+        steps = [10_000, 20_000]  # LAST_STEPS
         for step in steps:
             if step < 10_000:
                 continue
 
+            rich.print(f"\nStep: {step=}\n")
             step_last = step - 10_000
 
             cache_dir_last = f"models/pythia-{model_size}/step{step_last}"
