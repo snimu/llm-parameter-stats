@@ -1,15 +1,22 @@
+from __future__ import annotations
+
+import sys
 import os
 import shutil
 import itertools
 from tqdm import tqdm
 
 import rich
-from beartype import beartype
+from beartype import beartype_this_package
 import torch
 from torch import nn
 import pandas as pd
 import numpy as np
 from transformers import GPTNeoXForCausalLM
+
+
+if sys.version_info  >= (3, 10):
+    beartype_this_package()
 
 
 #####################
@@ -38,7 +45,6 @@ STEPS = FIRST_STEPS + LAST_STEPS
 # --- HELPERS --- #
 ###################
 
-@beartype
 def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
     if isinstance(x, float):
         return x
@@ -47,14 +53,12 @@ def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
     return x.detach().cpu().tolist()
 
 
-@beartype
 def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
     if isinstance(x, float):
         return np.array(x)
     return x.detach().cpu().numpy()
 
 
-@beartype
 def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
     model = GPTNeoXForCausalLM.from_pretrained(
         f"EleutherAI/pythia-{model_size}",
@@ -64,7 +68,6 @@ def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM
     return model
 
 
-@beartype
 def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     results_intra_parameter = {
         "parameter": [],
@@ -119,7 +122,6 @@ def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     return results_intra_parameter, results_histogram, results_inter_parameter
 
 
-@beartype
 def get_title(model_size: str) -> str:
     title = "| ANALYZING NEW MODEL SIZE |"
     width = len(title)
@@ -135,7 +137,6 @@ def get_title(model_size: str) -> str:
 # --- STATISTICS --- #
 ######################
 
-@beartype
 def calculate_sparsity(
         tensor: torch.Tensor | nn.Parameter, 
         threshold: float = 0.0
@@ -161,7 +162,6 @@ def calculate_sparsity(
     return sparsity
 
 
-@beartype
 def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
     tensor = tensor.flatten().float()
     mean = torch.mean(tensor)
@@ -170,7 +170,6 @@ def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
     return skewness.item()
 
 
-@beartype
 def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
     tensor = tensor.flatten().float()
     mean = torch.mean(tensor)
@@ -183,13 +182,13 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
 # --- ADD STATISTICS TO RESULTS --- #
 #####################################
 
-@beartype 
 def add_intra_parameter_statistics(
         results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
         name: str, 
         step: int,
 ) -> dict[str, str | float]:
+    parameter = parameter.to(DEVICE)
     results["parameter"].append(name)
     results["step"].append(step)
 
@@ -230,10 +229,11 @@ def add_intra_parameter_statistics(
     results["L1"].append(to_python(parameter.norm(1)))
     results["L2"].append(to_python(parameter.norm(2)))
 
+    parameter = parameter.to("cpu")
+
     return results
 
 
-@beartype
 def add_inter_parameter_statistics(
         results: dict[str, str | float],
         parameter_now: nn.Parameter | torch.Tensor,
@@ -263,7 +263,6 @@ def add_inter_parameter_statistics(
     return results
 
 
-@beartype
 def add_histogram(
         results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
@@ -287,7 +286,6 @@ def add_histogram(
 # --- MAIN --- #
 ################
 
-@beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
@@ -317,10 +315,6 @@ def main() -> None:
             for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
                 model_n.named_parameters(), model_n_next.named_parameters()
             ):
-                # Speed up by moving to GPU if available
-                parameter_n = parameter_n.to(DEVICE)
-                parameter_n_next = parameter_n_next.to(DEVICE)
-
                 # Intra-parameter statistics
                 results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
                 all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
@@ -334,10 +328,6 @@ def main() -> None:
                 results_inter_parameter = add_inter_parameter_statistics(
                     results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n, step_n_next
                 )
-
-                # Free up GPU memory
-                parameter_n = parameter_n.cpu()
-                parameter_n_next = parameter_n_next.cpu()
 
             # Add data for all parameters
             results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
@@ -382,10 +372,6 @@ def main() -> None:
             for (name_last, parameter_last), (name, parameter) in zip(
                 model_last.named_parameters(), model.named_parameters()
             ):
-                # Speed up by moving to GPU if available
-                parameter_last = parameter_last.to(DEVICE)
-                parameter = parameter.to(DEVICE)
-
                 all_parameter_values = torch.cat((all_parameter_values, parameter.flatten()))
                 all_parameter_values_last = torch.cat((all_parameter_values_last, parameter_last.flatten()))
 
@@ -393,10 +379,6 @@ def main() -> None:
                 results_inter_parameter = add_inter_parameter_statistics(
                     results_inter_parameter, parameter_last, parameter, name, step_last, step
                 )
-
-                # Free up GPU memory
-                parameter_last = parameter_last.cpu()
-                parameter = parameter.cpu()
 
             # Add data for all parameters
             results_inter_parameter = add_inter_parameter_statistics(
