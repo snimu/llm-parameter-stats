@@ -374,8 +374,8 @@ def main() -> None:
             # Add data for all parameters
             results_inter_parameter = add_inter_parameter_statistics(
                 results=results_inter_parameter, 
-                parameter_now=all_parameter_values, 
-                parameter_last=all_parameter_values_last, 
+                parameter_now=all_parameter_values_next, 
+                parameter_last=all_parameter_values, 
                 name="all_parameters", 
                 step_last=step - 10_000, 
                 step_now=step,
