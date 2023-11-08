@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import sys
 import os
 import shutil
 import itertools
 from tqdm import tqdm
 
 import rich
-from beartype import beartype_this_package
+try:
+    from beartype import beartype_this_package
+    beartype_this_package()
+except ImportError:
+    pass
 import torch
 from torch import nn
 import pandas as pd
@@ -15,8 +18,11 @@ import numpy as np
 from transformers import GPTNeoXForCausalLM
 
 
-if sys.version_info  >= (3, 10):
-    beartype_this_package()
+def pairwise(x):
+    try:
+        return itertools.pairwise(x)
+    except AttributeError:
+        return zip(x[:-1], x[1:])
 
 
 #####################
@@ -299,7 +305,7 @@ def main() -> None:
         model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
         model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
 
-        for i, (step_n, step_n_next) in enumerate(itertools.pairwise(steps)):
+        for i, (step_n, step_n_next) in enumerate(pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)-1}\n")
 
             cache_dir_last = f"models/pythia-{model_size}/step{step_n}"
