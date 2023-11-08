@@ -41,10 +41,8 @@ MODEL_SIZES = [
         "2.8b", "2.8b-deduped",
         "6.9b", "6.9b-deduped",
         "12b", "12b-deduped",
-    ]
-FIRST_STEPS = [0] + [2**i for i in range(10)] 
-LAST_STEPS = [i * 1000 for i in range(1, 144)]
-STEPS = FIRST_STEPS + LAST_STEPS
+]
+STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
 
 
 ###################
