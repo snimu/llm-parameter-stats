@@ -348,20 +348,17 @@ def main() -> None:
                     results_histogram, all_parameter_values_next, "all_parameters", step_n_next
                 )
 
-            # Free up storage
-            shutil.rmtree(cache_dir_last)
-
             # Calculate inter-parameter statistics in 10_000-step-intervals
             if step_n_next < 10_000:
                 continue
 
-            cache_dir_last = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
-            model_n = load_model(model_size, step_n_next - 10_000, cache_dir_last)
+            cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
+            model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
 
             all_parameter_values = torch.tensor([])
             all_parameter_values_next = torch.tensor([])
             for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
-                model_n.named_parameters(), model_n_next.named_parameters()
+                model_10_000.named_parameters(), model_n_next.named_parameters()
             ):
                 all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
                 all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
@@ -377,12 +374,13 @@ def main() -> None:
                 parameter_now=all_parameter_values_next, 
                 parameter_last=all_parameter_values, 
                 name="all_parameters", 
-                step_last=step - 10_000, 
-                step_now=step,
+                step_last=step_n_next - 10_000, 
+                step_now=step_n_next,
             )
 
             # Free up storage
             shutil.rmtree(cache_dir_last)
+            shutil.rmtree(cache_dir_10_000)
             shutil.rmtree(cache_dir)
             
 
