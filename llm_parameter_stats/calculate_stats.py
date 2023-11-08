@@ -347,39 +347,24 @@ def main() -> None:
             # Free up storage
             shutil.rmtree(cache_dir_last)
 
-        # Free up more memory
-        shutil.rmtree(cache_dir)
-
-        # Calculate inter-parameter statistics in 10_000 step-intervals
-        print("\n\nCalculating inter-parameter statistics in 10_000 step-intervals\n")
-        steps = [10_000, 20_000]  # LAST_STEPS
-        for step in steps:
-            if step < 10_000:
+            # Calculate inter-parameter statistics in 10_000-step-intervals
+            if step_n_next < 10_000:
                 continue
 
-            rich.print(f"\nStep: {step=}\n")
-            step_last = step - 10_000
-
-            cache_dir_last = f"models/pythia-{model_size}/step{step_last}"
-            cache_dir = f"models/pythia-{model_size}/step{step}"
-
-            # Load the models
-            model_last = load_model(model_size, step_last, cache_dir_last)
-            model = load_model(model_size, step, cache_dir)
+            cache_dir_last = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
+            model_n = load_model(model_size, step_n_next - 10_000, cache_dir_last)
 
             all_parameter_values = torch.tensor([])
-            all_parameter_values_last = torch.tensor([])
-
-            # Calculate the statistics
-            for (name_last, parameter_last), (name, parameter) in zip(
-                model_last.named_parameters(), model.named_parameters()
+            all_parameter_values_next = torch.tensor([])
+            for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
+                model_n.named_parameters(), model_n_next.named_parameters()
             ):
-                all_parameter_values = torch.cat((all_parameter_values, parameter.flatten()))
-                all_parameter_values_last = torch.cat((all_parameter_values_last, parameter_last.flatten()))
+                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
+                all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
 
                 # Inter-parameter statistics
                 results_inter_parameter = add_inter_parameter_statistics(
-                    results_inter_parameter, parameter_last, parameter, name, step_last, step
+                    results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n_next - 10_000, step_n_next
                 )
 
             # Add data for all parameters
@@ -388,13 +373,17 @@ def main() -> None:
                 parameter_now=all_parameter_values, 
                 parameter_last=all_parameter_values_last, 
                 name="all_parameters", 
-                step_last=step_last, 
+                step_last=step - 10_000, 
                 step_now=step,
             )
 
             # Free up storage
             shutil.rmtree(cache_dir_last)
             shutil.rmtree(cache_dir)
+            
+
+        # Free up more memory
+        shutil.rmtree(cache_dir)
         
         # Save the results
         os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
