@@ -294,8 +294,8 @@ def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
 
-    steps = [0, 1, 2]  # STEPS
-    model_sizes = ["70m"]#, "70m-deduped"]  # MODEL_SIZES
+    steps = STEPS
+    model_sizes =  MODEL_SIZES
 
     for model_size in model_sizes:
         print(get_title(model_size))
@@ -381,7 +381,6 @@ def main() -> None:
             # Free up storage
             shutil.rmtree(cache_dir_last)
             shutil.rmtree(cache_dir_10_000)
-            shutil.rmtree(cache_dir)
             
 
         # Free up more memory
