@@ -29,7 +29,6 @@ def pairwise(x):
 # --- CONSTANTS --- #
 #####################
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
 MODEL_SIZES = [
@@ -192,7 +191,6 @@ def add_intra_parameter_statistics(
         name: str, 
         step: int,
 ) -> dict[str, str | float]:
-    parameter = parameter.to(DEVICE)
     results["parameter"].append(name)
     results["step"].append(step)
 
@@ -232,8 +230,6 @@ def add_intra_parameter_statistics(
     # Calculate the L1 and L2 norms
     results["L1"].append(to_python(parameter.norm(1)))
     results["L2"].append(to_python(parameter.norm(2)))
-
-    parameter = parameter.to("cpu")
 
     return results
 
