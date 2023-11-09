@@ -336,8 +336,8 @@ def main() -> None:
                 if step_n_next == steps[-1]:
                     parameter_n_next = parameter_n_next.to(DEVICE)  # speed up calculations
                     results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
-                    results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
                     parameter_n_next = parameter_n_next.to("cpu")  # free up memory
+                    results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
 
                 # Inter-parameter statistics
                 parameter_n = parameter_n.to(DEVICE)
