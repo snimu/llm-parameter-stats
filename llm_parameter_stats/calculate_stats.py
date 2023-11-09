@@ -29,6 +29,7 @@ def pairwise(x):
 # --- CONSTANTS --- #
 #####################
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
 MODEL_SIZES = [
@@ -317,20 +318,30 @@ def main() -> None:
                 model_n.named_parameters(), model_n_next.named_parameters()
             ):
                 # Intra-parameter statistics
+                parameter_n = parameter_n.to(DEVICE)
                 results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
-                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
-                all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
+                parameter_n = parameter_n.to("cpu")  # make sure to free up memory
+
+                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten())).to("cpu")  # make sure to free up memory
+                all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten())).to("cpu")  # make sure to free up memory
                 results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
+
                 if step_n_next == steps[-1]:
+                    parameter_n_next = parameter_n_next.to(DEVICE)  # speed up calculations
                     results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
                     results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
+                    parameter_n_next = parameter_n_next.to("cpu")  # free up memory
 
                 # Inter-parameter statistics
+                parameter_n = parameter_n.to(DEVICE)
+                parameter_n_next = parameter_n_next.to(DEVICE)
                 results_inter_parameter = add_inter_parameter_statistics(
                     results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n, step_n_next
                 )
+                parameter_n = parameter_n.to("cpu")
+                parameter_n_next = parameter_n_next.to("cpu")
 
-            # Add data for all parameters
+            # Add data for all parameters (on cpu, cannot hold all parameters on gpu)
             results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
             results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
             results_inter_parameter = add_inter_parameter_statistics(
@@ -359,9 +370,13 @@ def main() -> None:
                     all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
 
                     # Inter-parameter statistics
+                    parameter_n = parameter_n.to(DEVICE)
+                    parameter_n_next = parameter_n_next.to(DEVICE)
                     results_inter_parameter = add_inter_parameter_statistics(
                         results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n_next - 10_000, step_n_next
                     )
+                    parameter_n = parameter_n.to("cpu")
+                    parameter_n_next = parameter_n_next.to("cpu")
 
                 # Add data for all parameters
                 results_inter_parameter = add_inter_parameter_statistics(
