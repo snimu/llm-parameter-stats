@@ -349,51 +349,58 @@ def main() -> None:
                 )
 
             # Calculate inter-parameter statistics in 10_000-step-intervals
-            if step_n_next < 10_000:
-                continue
+            if step_n_next >= 10_000:
 
-            cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
-            model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
+                cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
+                model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
 
-            all_parameter_values = torch.tensor([])
-            all_parameter_values_next = torch.tensor([])
-            for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
-                model_10_000.named_parameters(), model_n_next.named_parameters()
-            ):
-                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
-                all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
+                all_parameter_values = torch.tensor([])
+                all_parameter_values_next = torch.tensor([])
+                for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
+                    model_10_000.named_parameters(), model_n_next.named_parameters()
+                ):
+                    all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
+                    all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
 
-                # Inter-parameter statistics
+                    # Inter-parameter statistics
+                    results_inter_parameter = add_inter_parameter_statistics(
+                        results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n_next - 10_000, step_n_next
+                    )
+
+                # Add data for all parameters
                 results_inter_parameter = add_inter_parameter_statistics(
-                    results_inter_parameter, parameter_n, parameter_n_next, name_n, step_n_next - 10_000, step_n_next
+                    results=results_inter_parameter, 
+                    parameter_now=all_parameter_values_next, 
+                    parameter_last=all_parameter_values, 
+                    name="all_parameters", 
+                    step_last=step_n_next - 10_000, 
+                    step_now=step_n_next,
                 )
 
-            # Add data for all parameters
-            results_inter_parameter = add_inter_parameter_statistics(
-                results=results_inter_parameter, 
-                parameter_now=all_parameter_values_next, 
-                parameter_last=all_parameter_values, 
-                name="all_parameters", 
-                step_last=step_n_next - 10_000, 
-                step_now=step_n_next,
-            )
+                # Free up storage
+                shutil.rmtree(cache_dir_last)
+                shutil.rmtree(cache_dir_10_000)
 
-            # Free up storage
-            shutil.rmtree(cache_dir_last)
-            shutil.rmtree(cache_dir_10_000)
+            # Save all the results
+            os.makedirs(f"results/exp/pythia-{model_size}", exist_ok=True)
+
+            df_intra_parameter = pd.DataFrame(results_intra_parameter)
+            df_inter_parameter = pd.DataFrame(results_inter_parameter)
+            df_histogram = pd.DataFrame(results_histogram)
+
+            with open(f"results/exp/pythia-{model_size}/intra_parameter.csv", 'a') as f:
+                df_intra_parameter.to_csv(f, header=f.tell()==0, index=False)
+            with open(f"results/exp/pythia-{model_size}/inter_parameter.csv", 'a') as f:
+                df_inter_parameter.to_csv(f, header=f.tell()==0, index=False)
+            with open(f"results/exp/pythia-{model_size}/histogram.csv", 'a') as f:
+                df_histogram.to_csv(f, header=f.tell()==0, index=False)
+
+            # Re-initialize the result-dirs
+            results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
             
 
         # Free up more memory
         shutil.rmtree(cache_dir)
-        
-        # Save the results
-        os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
-        df_intra_parameter = pd.DataFrame(results_intra_parameter)
-        df_inter_parameter = pd.DataFrame(results_inter_parameter)
-        df_histogram = pd.DataFrame(results_histogram)
-        df_intra_parameter.to_csv(f"results/pythia-{model_size}/intra_parameter.csv", index=False)
-        df_inter_parameter.to_csv(f"results/pythia-{model_size}/inter_parameter.csv", index=False)
-        df_histogram.to_csv(f"results/pythia-{model_size}/histogram.csv", index=False)
 
 
 #######################
