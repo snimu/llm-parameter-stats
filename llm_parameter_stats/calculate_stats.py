@@ -300,6 +300,11 @@ def main() -> None:
         model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
         model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
 
+        num_parameters = 0
+        for _, _ in model_n.named_parameters():
+            num_parameters += 1
+            del _ 
+
         for i, (step_n, step_n_next) in enumerate(pairwise(steps)):
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)-1}\n")
 
@@ -314,8 +319,10 @@ def main() -> None:
             all_parameter_values_next = torch.tensor([])
 
             # Calculate the statistics
-            for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
-                model_n.named_parameters(), model_n_next.named_parameters()
+            rich.print("Calculating statistics...")
+            for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
+                zip(model_n.named_parameters(), model_n_next.named_parameters()),
+                total=num_parameters,
             ):
                 # Intra-parameter statistics
                 parameter_n = parameter_n.to(DEVICE)
@@ -342,6 +349,7 @@ def main() -> None:
                 parameter_n_next = parameter_n_next.to("cpu")
 
             # Add data for all parameters (on cpu, cannot hold all parameters on gpu)
+            rich.print("Calculating statistics for all parameters...")
             results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
             results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
             results_inter_parameter = add_inter_parameter_statistics(
@@ -357,14 +365,16 @@ def main() -> None:
 
             # Calculate inter-parameter statistics in 10_000-step-intervals
             if step_n_next >= 10_000:
+                rich.print("Calculating statistics for 10_000-step-intervals...")
 
                 cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
                 model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
 
                 all_parameter_values = torch.tensor([])
                 all_parameter_values_next = torch.tensor([])
-                for (name_n, parameter_n), (name_n_next, parameter_n_next) in zip(
-                    model_10_000.named_parameters(), model_n_next.named_parameters()
+                for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
+                    zip(model_10_000.named_parameters(), model_n_next.named_parameters()),
+                    total=num_parameters,
                 ):
                     all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
                     all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
@@ -379,6 +389,7 @@ def main() -> None:
                     parameter_n_next = parameter_n_next.to("cpu")
 
                 # Add data for all parameters
+                rich.print("Calculating statistics for all parameters...")
                 results_inter_parameter = add_inter_parameter_statistics(
                     results=results_inter_parameter, 
                     parameter_now=all_parameter_values_next, 
