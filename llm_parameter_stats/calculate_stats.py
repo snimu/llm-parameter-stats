@@ -404,17 +404,17 @@ def main() -> None:
                 shutil.rmtree(cache_dir_10_000)
 
             # Save all the results
-            os.makedirs(f"results/exp/pythia-{model_size}", exist_ok=True)
+            os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
 
             df_intra_parameter = pd.DataFrame(results_intra_parameter)
             df_inter_parameter = pd.DataFrame(results_inter_parameter)
             df_histogram = pd.DataFrame(results_histogram)
 
-            with open(f"results/exp/pythia-{model_size}/intra_parameter.csv", 'a') as f:
+            with open(f"results/pythia-{model_size}/intra_parameter.csv", 'a') as f:
                 df_intra_parameter.to_csv(f, header=f.tell()==0, index=False)
-            with open(f"results/exp/pythia-{model_size}/inter_parameter.csv", 'a') as f:
+            with open(f"results/pythia-{model_size}/inter_parameter.csv", 'a') as f:
                 df_inter_parameter.to_csv(f, header=f.tell()==0, index=False)
-            with open(f"results/exp/pythia-{model_size}/histogram.csv", 'a') as f:
+            with open(f"results/pythia-{model_size}/histogram.csv", 'a') as f:
                 df_histogram.to_csv(f, header=f.tell()==0, index=False)
 
             # Re-initialize the result-dirs
