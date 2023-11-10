@@ -312,8 +312,12 @@ def main() -> None:
             cache_dir = f"models/pythia-{model_size}/step{step_n_next}"
 
             # Load the models
-            model_n = load_model(model_size, step_n, cache_dir_last) if step_n == 0 else model_n_next
-            model_n_next = load_model(model_size, step_n_next, cache_dir)
+            try:
+                model_n = load_model(model_size, step_n, cache_dir_last) if step_n == 0 else model_n_next
+                model_n_next = load_model(model_size, step_n_next, cache_dir)
+            except EnvironmentError as e:
+                rich.print(f"ERROR: {e}")
+                continue 
 
             all_parameter_values = torch.tensor([])
             all_parameter_values_next = torch.tensor([])
