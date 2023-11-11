@@ -4,6 +4,7 @@ import os
 import shutil
 import itertools
 from tqdm import tqdm
+from time import perf_counter
 
 import rich
 try:
@@ -296,6 +297,8 @@ def main() -> None:
 
     for model_size in model_sizes:
         print(get_title(model_size))
+
+        start_time_model = perf_counter()
         results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
         model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
         model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
@@ -311,6 +314,8 @@ def main() -> None:
             del _ 
 
         for i, (step_n, step_n_next) in enumerate(pairwise(steps)):
+            start_time_step = perf_counter()
+
             rich.print(f"\nStep: {step_n=}, {step_n_next=} :: number {i+1}/{len(steps)-1}\n")
 
             cache_dir_last = f"models/pythia-{model_size}/step{step_n}"
@@ -429,6 +434,10 @@ def main() -> None:
 
             # Re-initialize the result-dirs
             results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
+
+            # Print the time it took to calculate the statistics
+            time = perf_counter() - start_time_step
+            rich.print(f"\n\nTotal time for this step: {time:.2f}s\n\n")
             
 
         # Free up more memory
@@ -437,6 +446,11 @@ def main() -> None:
         # Save the errors
         with open(f"results/pythia-{model_size}/errors.txt", 'w') as f:
             f.write("\n\n".join(errors))
+
+        # Print the time it took to calculate the statistics
+        time = perf_counter() - start_time_model
+        rich.print(f"\n\nTotal time for this model: {time:.2f}s\n\n")
+
 
 
 #######################
