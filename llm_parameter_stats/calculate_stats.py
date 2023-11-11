@@ -138,6 +138,13 @@ def get_title(model_size: str) -> str:
     return title
 
 
+def time_passed(start_time: float) -> tuple[float, float, float]:
+    time_seconds = perf_counter() - start_time
+    hours, remainder = divmod(time_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return hours, minutes, seconds
+
+
 ######################
 # --- STATISTICS --- #
 ######################
@@ -436,8 +443,8 @@ def main() -> None:
             results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
 
             # Print the time it took to calculate the statistics
-            time = perf_counter() - start_time_step
-            rich.print(f"\n\nTotal time for this step: {time:.2f}s\n\n")
+            hours, minutes, seconds = time_passed(start_time_step)
+            rich.print(f"\n\nTotal time for this step: {hours}:{minutes}:{seconds} (hrs:min:sec)\n\n")
             
 
         # Free up more memory
@@ -448,8 +455,8 @@ def main() -> None:
             f.write("\n\n".join(errors))
 
         # Print the time it took to calculate the statistics
-        time = perf_counter() - start_time_model
-        rich.print(f"\n\nTotal time for this model: {time:.2f}s\n\n")
+        hours, minutes, seconds = time_passed(start_time_model)
+        rich.print(f"\n\nTotal time for this model: {hours}:{minutes}:{seconds} (hrs:min:sec)\n\n")
 
 
 
