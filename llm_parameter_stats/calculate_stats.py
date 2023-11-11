@@ -300,6 +300,11 @@ def main() -> None:
         model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
         model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
 
+        # Store errors in list to save them later
+        # Don't save errors in above model initilization, because I want to see problems with it
+        #   immediately, instead of after hours of waiting.
+        errors = []
+
         num_parameters = 0
         for _, _ in model_n.named_parameters():
             num_parameters += 1
@@ -316,6 +321,7 @@ def main() -> None:
                 model_n = load_model(model_size, step_n, cache_dir_last) if step_n == 0 else model_n_next
                 model_n_next = load_model(model_size, step_n_next, cache_dir)
             except EnvironmentError as e:
+                errors.append(repr(e))
                 rich.print(f"ERROR: {e}")
                 continue 
 
@@ -427,6 +433,10 @@ def main() -> None:
 
         # Free up more memory
         shutil.rmtree(cache_dir)
+
+        # Save the errors
+        with open(f"results/pythia-{model_size}/errors.txt", 'w') as f:
+            f.write("\n\n".join(errors))
 
 
 #######################
