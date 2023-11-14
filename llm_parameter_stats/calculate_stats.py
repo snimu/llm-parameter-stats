@@ -8,8 +8,7 @@ from time import perf_counter
 
 import rich
 try:
-    from beartype import beartype_this_package
-    beartype_this_package()
+    from beartype import beartype
 except ImportError:
     pass
 import torch
@@ -17,6 +16,13 @@ from torch import nn
 import pandas as pd
 import numpy as np
 from transformers import GPTNeoXForCausalLM
+
+
+def save_beartype(func):
+    try:
+        return beartype(func)
+    except NameError:
+        return func
 
 
 def pairwise(x):
@@ -50,6 +56,7 @@ STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
 # --- HELPERS --- #
 ###################
 
+@save_beartype
 def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
     if isinstance(x, float):
         return x
@@ -58,12 +65,14 @@ def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
     return x.detach().cpu().tolist()
 
 
+@save_beartype
 def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
     if isinstance(x, float):
         return np.array(x)
     return x.detach().cpu().numpy()
 
 
+@save_beartype
 def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
     model = GPTNeoXForCausalLM.from_pretrained(
         f"EleutherAI/pythia-{model_size}",
@@ -73,6 +82,7 @@ def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM
     return model
 
 
+@save_beartype
 def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     results_intra_parameter = {
         "parameter": [],
@@ -127,6 +137,7 @@ def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     return results_intra_parameter, results_histogram, results_inter_parameter
 
 
+@save_beartype
 def get_title(model_size: str) -> str:
     title = "| ANALYZING NEW MODEL SIZE |"
     width = len(title)
@@ -138,6 +149,7 @@ def get_title(model_size: str) -> str:
     return title
 
 
+@save_beartype
 def time_passed(start_time: float) -> tuple[float, float, float]:
     time_seconds = perf_counter() - start_time
     hours, remainder = divmod(time_seconds, 3600)
@@ -149,6 +161,7 @@ def time_passed(start_time: float) -> tuple[float, float, float]:
 # --- STATISTICS --- #
 ######################
 
+@save_beartype
 def calculate_sparsity(
         tensor: torch.Tensor | nn.Parameter, 
         threshold: float = 0.0
@@ -174,6 +187,7 @@ def calculate_sparsity(
     return sparsity
 
 
+@save_beartype
 def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
     tensor = tensor.flatten().float()
     mean = torch.mean(tensor)
@@ -182,6 +196,7 @@ def skewness(tensor: torch.Tensor | nn.Parameter) -> float:
     return skewness.item()
 
 
+@save_beartype
 def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
     tensor = tensor.flatten().float()
     mean = torch.mean(tensor)
@@ -194,6 +209,7 @@ def kurtosis(tensor: torch.Tensor | nn.Parameter) -> float:
 # --- ADD STATISTICS TO RESULTS --- #
 #####################################
 
+@save_beartype
 def add_intra_parameter_statistics(
         results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
@@ -243,6 +259,7 @@ def add_intra_parameter_statistics(
     return results
 
 
+@save_beartype
 def add_inter_parameter_statistics(
         results: dict[str, str | float],
         parameter_now: nn.Parameter | torch.Tensor,
@@ -272,6 +289,7 @@ def add_inter_parameter_statistics(
     return results
 
 
+@save_beartype
 def add_histogram(
         results: dict[str, str | float],
         parameter: nn.Parameter | torch.Tensor,
@@ -295,6 +313,7 @@ def add_histogram(
 # --- MAIN --- #
 ################
 
+@save_beartype
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
