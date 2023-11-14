@@ -143,7 +143,14 @@ def plot_results(
 
         title = f"{key} ({df_type})"
         plt.title(title)
-        plt.legend()
+        plt.gcf().subplots_adjust(bottom=0.3)  # Make space for the legend
+        plt.legend(
+            bbox_to_anchor=(0., -0.3, 1., .102),  # Move the legend down
+            loc='upper left',
+            ncol=3, 
+            mode="expand", 
+            borderaxespad=0.
+        )
 
         if show:
             plt.show()
@@ -181,8 +188,8 @@ def analyze_models(show: bool = True) -> None:
         dfs_inter_parameter_10_000.append(df[df['step_next'] - df['step'] == 10_000])
 
     # Create video of histogram
-    for i, model_size in enumerate(model_sizes):
-        histogram_video(dfs_hist[i], model_size, "all_parameters")
+    # for i, model_size in enumerate(model_sizes):
+    #     histogram_video(dfs_hist[i], model_size, "all_parameters")
 
     # Plot results
     plot_results(dfs_intra_parameter, model_sizes, df_type="intra_parameter", show=show)
