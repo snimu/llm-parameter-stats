@@ -21,20 +21,6 @@ from transformers import GPTNeoXForCausalLM
 from packaging import version
 
 
-def save_beartype(func):
-    if version.parse(sys.version.split(" ")[0]) >= version.parse("3.10"):
-        return beartype(func)
-    else:
-        return func
-
-
-def pairwise(x):
-    try:
-        return itertools.pairwise(x)
-    except AttributeError:
-        return zip(x[:-1], x[1:])
-
-
 #####################
 # --- CONSTANTS --- #
 #####################
@@ -59,6 +45,20 @@ STEPS = [0] + STEPS_POWER_OF_TWO + [i * 1000 for i in range(1, 144)]
 ###################
 # --- HELPERS --- #
 ###################
+
+
+def save_beartype(func):
+    if version.parse(sys.version.split(" ")[0]) >= version.parse("3.10"):
+        return beartype(func)
+    else:
+        return func
+
+
+def pairwise(x):
+    try:
+        return itertools.pairwise(x)
+    except AttributeError:
+        return zip(x[:-1], x[1:])
 
 @save_beartype
 def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
