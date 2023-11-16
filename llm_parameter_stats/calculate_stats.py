@@ -52,7 +52,8 @@ MODEL_SIZES = [
         "6.9b", "6.9b-deduped",
         "12b", "12b-deduped",
 ]
-STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
+STEPS_POWER_OF_TWO = [2**i for i in range(10)]
+STEPS = [0] + STEPS_POWER_OF_TWO + [i * 1000 for i in range(1, 144)]
 
 
 ###################
@@ -83,6 +84,18 @@ def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM
         cache_dir=cache_dir,
     )
     return model
+
+
+@save_beartype
+def optional_remove(model_size: str, current_step: int) -> None:
+    """
+    Remove steps that aren't needed anymore, 
+    but keep them for at least 10000 steps to not have to download another model.
+    """
+    if current_step in STEPS_POWER_OF_TWO:
+        shutil.rmtree(f"models/pythia-{model_size}/step{current_step}")
+    if current_step >= 11_000:
+        shutil.rmtree(f"models/pythia-{model_size}/step{current_step - 11_000}")
 
 
 @save_beartype
@@ -449,8 +462,7 @@ def main() -> None:
                 )
 
                 # Free up storage
-                shutil.rmtree(cache_dir_last)
-                shutil.rmtree(cache_dir_10_000)
+                optional_remove(model_size, step_n)
 
             # Save all the results
             os.makedirs(f"results/pythia-{model_size}", exist_ok=True)
