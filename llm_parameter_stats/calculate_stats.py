@@ -54,6 +54,13 @@ def save_beartype(func):
         return func
 
 
+def save_inference_mode(func):
+    if hasattr(torch, "inference_mode") and callable(torch.inference_mode):
+        return torch.inference_mode()(func)
+    else:
+        return torch.no_grad()(func)
+
+
 def pairwise(x):
     try:
         return itertools.pairwise(x)
@@ -335,6 +342,7 @@ def add_histogram(
 ################
 
 @save_beartype
+@save_inference_mode
 def main() -> None:
     os.makedirs("results", exist_ok=True)
     os.makedirs("models", exist_ok=True)
