@@ -173,14 +173,14 @@ def get_title(model_size: str) -> str:
 
 
 @save_beartype
-def to_hours_minutes_seconds(time_seconds: float) -> tuple[float, float, float]:
+def to_hours_minutes_seconds(time_seconds: float) -> tuple[int, int, int]:
     hours, remainder = divmod(time_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-    return hours, minutes, seconds
+    return int(round(hours)), int(round(minutes)), int(round(seconds))
 
 
 @save_beartype
-def time_passed(start_time: float) -> tuple[float, float, float]:
+def time_passed(start_time: float) -> tuple[int, int, int]:
     time_seconds = perf_counter() - start_time
     return to_hours_minutes_seconds(time_seconds)
 
@@ -491,7 +491,7 @@ def main() -> None:
 
             # Print the time it took to calculate the statistics
             hours, minutes, seconds = time_passed(start_time_step)
-            rich.print(f"\n\nTotal time for this step: {hours}:{minutes}:{int(round(seconds))} (hrs:min:sec)")
+            rich.print(f"\n\nTotal time for this step: {hours}:{minutes}:{seconds} (hrs:min:sec)")
             eta = (perf_counter() - start_time_step) * (len(steps) - i - 1)
             hours, minutes, seconds = to_hours_minutes_seconds(eta)
             rich.print(f"Estimated time remaining: {hours}:{minutes}:{seconds} (hrs:min:sec)\n\n")
@@ -506,7 +506,7 @@ def main() -> None:
 
         # Print the time it took to calculate the statistics
         hours, minutes, seconds = time_passed(start_time_model)
-        rich.print(f"\n\nTotal time for this model: {hours}:{minutes}:{int(round(seconds))} (hrs:min:sec)\n\n")
+        rich.print(f"\n\nTotal time for this model: {hours}:{minutes}:{seconds} (hrs:min:sec)\n\n")
 
 
 
