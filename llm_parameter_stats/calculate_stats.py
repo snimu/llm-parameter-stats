@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import os
 import shutil
 import itertools
@@ -16,12 +18,13 @@ from torch import nn
 import pandas as pd
 import numpy as np
 from transformers import GPTNeoXForCausalLM
+from packaging import version
 
 
 def save_beartype(func):
-    try:
+    if version.parse(sys.version.split(" ")[0]) >= version.parse("3.10"):
         return beartype(func)
-    except NameError:
+    else:
         return func
 
 
