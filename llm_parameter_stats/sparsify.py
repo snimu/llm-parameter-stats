@@ -168,32 +168,6 @@ def sparsify_model(
 
 
 @save_beartype
-def calculate_batch_perplexity(
-        model: GPTNeoXForCausalLM,
-        batch: torch.Tensor,
-        batch_size: int,
-        num_tokens_per_sample: int,
-        device: str | int | torch.device,
-) -> float:
-    total_loss = 0.0
-
-    # Loop through each position
-    for i in range(2, num_tokens_per_sample):
-        inputs = batch[:, :i]
-        labels = labels = batch[:, :i].unsqueeze(-1) 
-        
-
-        with torch.no_grad():
-            outputs = model(inputs, labels=labels)
-            log_likelihood = outputs.loss * labels.size(0)  # Multiply by number of tokens
-        
-        # Update total loss for each item in batch
-        total_loss += log_likelihood.mean().item()
-
-    return total_loss
-
-
-@save_beartype
 def get_batches(
         input_ids: torch.Tensor,
         num_tokens_per_sample: int,
@@ -225,7 +199,7 @@ def calculate_perplexities(
         loop: tqdm,
         loop_description: str,
         exponentiate: bool = True,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> torch.Tensor:
     """Evaluate the perplexity of a model on a text."""
     num_tokens_per_sample = 128
     batch_size = 32
@@ -242,14 +216,11 @@ def calculate_perplexities(
 
     for i, batch in enumerate(batches):
         loop.set_description(loop_description + f"; batch {i+1}/{len(batches)}")
-        total_loss += calculate_batch_perplexity(
-            model, batch, batch_size, num_tokens_per_sample, device
-        )
+        total_loss += model(batch, labels=batch).loss.mean().item()
 
-    average_loss = torch.tensor(total_loss / len(batches))
-    perplexies = torch.exp(average_loss).item()
+    average_loss = total_loss / len(batches)
 
-    return perplexies, average_loss.item()
+    return average_loss
 
 
 @save_beartype
@@ -277,7 +248,7 @@ def load_test_datasets():
 @save_beartype
 def main() -> None:
     percentages = [0.5, 0.8, 0.9, 1.0]
-    additional_steps = [i*1000 for i in range(50, 144, 10)] + [143]
+    additional_steps = [i*1000 for i in range(50, 144, 10)] + [143_000]
     sparsity_bands = [
         # Provide baseline
         (0.0, 0.0),
@@ -316,7 +287,6 @@ def main() -> None:
                 "percentage_chinchilla_optimal": [],
                 "sparsity_band": [],
                 "perplexity": [],
-                "cross_entropy": [],
                 "std": [],
                 "abs_max": [],
             }
@@ -330,7 +300,7 @@ def main() -> None:
             loop = tqdm(sparsity_bands)
             for sparsity_band in loop:
                 description = f"{sparsity_band=}"
-                loop.set_description(description)
+                loop.set_description(description + "; preparing model")
 
                 # Reload model every time and then sparsify (to avoid accumulating sparsity)
                 model = GPTNeoXForCausalLM.from_pretrained(
@@ -344,16 +314,15 @@ def main() -> None:
 
                 model, std, abs_max = sparsify_model(model, sparsity_band, inplace=True)
 
-                perplexity, cross_entropy = calculate_perplexities(
+                perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
-                loop.write(f"{sparsity_band=}, {perplexity=:.3f}, {cross_entropy=:.3f}")
+                loop.write(f"{sparsity_band=}, {perplexity=:.3f}")
 
                 results["step"].append(step)
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
                 results["sparsity_band"].append(sparsity_band)
                 results["perplexity"].append(perplexity)
-                results["cross_entropy"].append(cross_entropy)
                 results["std"].append(std)
                 results["abs_max"].append(abs_max)
 
