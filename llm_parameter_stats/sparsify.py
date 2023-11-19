@@ -268,25 +268,28 @@ def load_test_datasets():
 
 @save_beartype
 def main() -> None:
-    percentages = [0.5, 0.8, 0.9, 1.0]
-    additional_steps = [i*1000 for i in range(50, 144, 10)] + [143_000]
+    percentages = [0.25, 0.5, 0.8, 0.9, 1.0]
+    additional_steps = [i*1000 for i in range(10, 144, 10)] + [143_000]
     sparsity_bands = [
         # Provide baseline
         (0.0, 0.0),
 
         # Sparsify the bottom n% of the parameters
+        (0.0, 1e-5)
         (0.0, 1e-4),
         (0.0, 1e-3),
         (0.0, 1e-2),
         (0.0, 1e-1),
 
         # Sparsify the top n% of the parameters
+        (1-1e-5, 1.0),
         (1-1e-4, 1.0),
         (1-1e-3, 1.0),
         (1-1e-2, 1.0),
         (1-1e-1, 1.0),
 
         # Sparsify the middle n% of the parameters as a control group
+        (0.5-5e-6, 0.5+5e-6),
         (0.5-5e-5, 0.5+5e-5),
         (0.5-5e-4, 0.5+5e-4),
         (0.5-5e-3, 0.5+5e-3),
