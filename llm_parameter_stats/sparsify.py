@@ -172,20 +172,23 @@ def sparsify_model(
         model: GPTNeoXForCausalLM,
         sparsity_band: tuple[float, float],
         inplace: bool = False,
-) -> tuple[GPTNeoXForCausalLM, float, float]:
+) -> tuple[GPTNeoXForCausalLM, float, float, int]:
     stds = []
     abs_maxs = []
+    num_nonzero = 0
 
     for parameter in model.parameters():
         if sparsity_band != (0.0, 0.0):
             parameter.data = sparsify_band(parameter.data, sparsity_band, inplace=inplace)
         stds.append(parameter.data.std().item())
         abs_maxs.append(parameter.data.abs().max().item())
+        num_nonzero += parameter.data.numel()
 
     std = np.mean(stds).item()
     abs_max = np.mean(abs_maxs).item()
+    num_nonzero = int(round(num_nonzero * (1 - sparsity_band[1] + sparsity_band[0])))
 
-    return model, std, abs_max
+    return model, std, abs_max, num_nonzero
 
 
 @save_beartype
@@ -314,6 +317,7 @@ def main() -> None:
                 "perplexity": [],
                 "std": [],
                 "abs_max": [],
+                "num_nonzero": [],
             }
 
             tokenizer = AutoTokenizer.from_pretrained(
@@ -337,12 +341,12 @@ def main() -> None:
                 model = model.to("cuda")
                 model.eval()
 
-                model, std, abs_max = sparsify_model(model, sparsity_band, inplace=True)
+                model, std, abs_max, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
 
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
-                loop.write(f"{sparsity_band=}, {perplexity=:.3f}")
+                loop.write(f"{sparsity_band=}, {perplexity=:.3f}, {std=:.3f}, {abs_max=:.3f}, {num_nonzero=}")
 
                 results["step"].append(step)
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
@@ -350,6 +354,7 @@ def main() -> None:
                 results["perplexity"].append(perplexity)
                 results["std"].append(std)
                 results["abs_max"].append(abs_max)
+                results["num_nonzero"].append(num_nonzero)
 
             shutil.rmtree(f"./models/pythia-{model_size}/step{step}")
 
