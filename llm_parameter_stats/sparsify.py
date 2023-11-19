@@ -287,10 +287,10 @@ def main() -> None:
         (1-1e-1, 1.0),
 
         # Sparsify the middle n% of the parameters as a control group
-        (0.5-1e-4, 0.5+1e-4),
-        (0.5-1e-3, 0.5+1e-3),
-        (0.5-1e-2, 0.5+1e-2),
-        (0.5-1e-1, 0.5+1e-1),
+        (0.5-5e-5, 0.5+5e-5),
+        (0.5-5e-4, 0.5+5e-4),
+        (0.5-5e-3, 0.5+5e-3),
+        (0.5-5e-2, 0.5+5e-2),
     ]
     _, dataset = load_test_datasets()
 
