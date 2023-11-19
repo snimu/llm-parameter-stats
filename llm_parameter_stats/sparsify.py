@@ -275,7 +275,7 @@ def main() -> None:
         (0.0, 0.0),
 
         # Sparsify the bottom n% of the parameters
-        (0.0, 1e-5)
+        (0.0, 1e-5),
         (0.0, 1e-4),
         (0.0, 1e-3),
         (0.0, 1e-2),
