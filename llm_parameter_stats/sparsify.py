@@ -97,6 +97,27 @@ def choose_steps_by_percentages(
 
 
 @save_beartype
+def deduplicate_steps_and_percentages(
+        steps: Sequence[int], 
+        percentages: Sequence[float]
+) -> tuple[Sequence[int], Sequence[float]]:
+    steps_count = {}
+    duplicate_idx = []
+    for i, step in enumerate(steps):
+        if step in steps_count.keys():
+            steps_count[step] += 1
+            duplicate_idx.append(i)
+        else:
+            steps_count[step] = 1
+
+    for i in duplicate_idx[::-1]:
+        steps.pop(i)
+        percentages.pop(i)
+
+    return steps, percentages
+
+
+@save_beartype
 def sparsify_band(
         tensor: torch.Tensor | nn.Parameter,
         band: tuple[float, float],
@@ -278,6 +299,7 @@ def main() -> None:
         additional_percentages = get_percentage_of_chinchilla_optimal(model_size, additional_steps)
         steps += additional_steps
         crnt_percentages = percentages + additional_percentages.tolist()
+        steps, crnt_percentages = deduplicate_steps_and_percentages(steps, crnt_percentages)
 
         for step_idx, step in enumerate(steps):
             rich.print(f"\n\nModel {model_size}, Step {step} ({step_idx+1}/{len(steps)})\n\n")
