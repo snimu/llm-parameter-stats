@@ -62,12 +62,11 @@ def get_chinchilla_optimal_steps(
         model_size: str,
 ) -> int:
     if "m" in model_size: 
-        factor = 1e6
+        model_size = int(model_size.split("m")[0]) * 1e6
     elif "b" in model_size:
-        factor = 1e9
+        model_size = int(model_size.split("b")[0]) * 1e9
     else:
         raise ValueError(f"Model size {model_size} not supported.")
-    model_size = int(model_size.split("m")[0]) * factor
 
     num_samples_chinchilla_optimal = int(20 * model_size)
     num_steps_chinchilla_optimal = int(num_samples_chinchilla_optimal / PYTHIA_BATCH_SIZE)
