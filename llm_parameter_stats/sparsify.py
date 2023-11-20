@@ -174,10 +174,12 @@ def sparsify_model(
         model: GPTNeoXForCausalLM,
         sparsity_band: tuple[float, float],
         inplace: bool = False,
-) -> tuple[GPTNeoXForCausalLM, float, float, int]:
+) -> tuple[GPTNeoXForCausalLM, float, float, float, int]:
     stds = []
     abs_maxs = []
     num_nonzero = 0
+    mean = 0.0
+    numel = 0
 
     for parameter in model.parameters():
         if sparsity_band != (0.0, 0.0):
@@ -185,12 +187,15 @@ def sparsify_model(
         stds.append(parameter.data.std().item())
         abs_maxs.append(parameter.data.abs().max().item())
         num_nonzero += parameter.data.numel()
+        mean += parameter.data.mean().item()
+        numel += parameter.data.numel()
 
     std = np.mean(stds).item()
     abs_max = np.mean(abs_maxs).item()
+    mean = mean / numel
     num_nonzero = int(round(num_nonzero * (1 - sparsity_band[1] + sparsity_band[0])))
 
-    return model, std, abs_max, num_nonzero
+    return model, std, mean, abs_max, num_nonzero
 
 
 @save_beartype
@@ -319,6 +324,7 @@ def main() -> None:
                 "perplexity": [],
                 "std": [],
                 "abs_max": [],
+                "mean": [],
                 "num_nonzero": [],
             }
 
@@ -343,7 +349,7 @@ def main() -> None:
                 model = model.to("cuda")
                 model.eval()
 
-                model, std, abs_max, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
+                model, std, mean, abs_max, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
 
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
