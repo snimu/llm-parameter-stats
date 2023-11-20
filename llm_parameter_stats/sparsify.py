@@ -140,6 +140,9 @@ def sparsify_band(
     if not inplace:
         tensor = tensor.clone()
 
+    signs = torch.sign(tensor)
+    tensor = tensor.abs()
+
     # Get the values in the tensor as a 1-D array
     values = tensor.view(-1).detach().cpu().numpy()
     # Compute the indices of the band
@@ -163,7 +166,7 @@ def sparsify_band(
     # Set the values within the band to zero
     tensor[mask] = 0.0
     # Return the sparsified tensor
-    return tensor
+    return signs * tensor
 
 
 @save_beartype
