@@ -186,14 +186,13 @@ def sparsify_model(
             parameter.data = sparsify_band(parameter.data, sparsity_band, inplace=inplace)
         stds.append(parameter.data.std().item())
         abs_maxs.append(parameter.data.abs().max().item())
-        num_nonzero += parameter.data.numel()
+        num_nonzero += (parameter == 0.0).sum().item()
         mean += parameter.data.mean().item()
         numel += parameter.data.numel()
 
     std = np.mean(stds).item()
     abs_max = np.mean(abs_maxs).item()
     mean = mean / numel
-    num_nonzero = int(round(num_nonzero * (1 - sparsity_band[1] + sparsity_band[0])))
 
     return model, std, mean, abs_max, num_nonzero
 
