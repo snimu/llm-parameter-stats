@@ -384,5 +384,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # main()
-    _test_sparsify_band()
+    main()
