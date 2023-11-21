@@ -150,6 +150,7 @@ def sparsify_band(
 
     # Don't sparsify if idx1 == idx2
     if idx1 == idx2:
+        tensor = signs * tensor
         return tensor
 
     # Sort the values
