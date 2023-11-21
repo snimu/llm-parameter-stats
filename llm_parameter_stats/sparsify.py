@@ -188,7 +188,7 @@ def sparsify_model(
         stds.append(parameter.data.std().item())
         maximum = max(maximum, parameter.data.max().item())
         minimum = min(minimum, parameter.data.min().item())
-        num_nonzero += (parameter == 0.0).sum().item()
+        num_nonzero += (parameter != 0.0).sum().item()
         mean += parameter.data.mean().item()
         numel += parameter.data.numel()
 
@@ -383,4 +383,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    _test_sparsify_band()
