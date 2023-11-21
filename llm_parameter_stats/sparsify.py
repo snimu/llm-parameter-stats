@@ -62,13 +62,13 @@ def get_chinchilla_optimal_steps(
         model_size: str,
 ) -> int:
     if "m" in model_size: 
-        model_size = int(model_size.split("m")[0]) * 1e6
+        model_size = float(model_size.split("m")[0]) * 1e6
     elif "b" in model_size:
-        model_size = int(model_size.split("b")[0]) * 1e9
+        model_size = float(model_size.split("b")[0]) * 1e9
     else:
         raise ValueError(f"Model size {model_size} not supported.")
 
-    num_samples_chinchilla_optimal = int(20 * model_size)
+    num_samples_chinchilla_optimal = 20 * model_size
     num_steps_chinchilla_optimal = int(num_samples_chinchilla_optimal / PYTHIA_BATCH_SIZE)
     return num_steps_chinchilla_optimal
 
@@ -361,6 +361,7 @@ def main() -> None:
                 results["sparsity_band"].append(sparsity_band)
                 results["perplexity"].append(perplexity)
                 results["std"].append(std)
+                results["mean"].append(mean)
                 results["abs_max"].append(abs_max)
                 results["num_nonzero"].append(num_nonzero)
 
