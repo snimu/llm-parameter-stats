@@ -316,7 +316,12 @@ def main() -> None:
         steps, crnt_percentages = deduplicate_steps_and_percentages(steps, crnt_percentages)
 
         for step_idx, step in enumerate(steps):
-            rich.print(f"\n\nModel {model_size}, Step {step} ({step_idx+1}/{len(steps)})\n\n")
+            rich.print(
+                f"\n\nModel: {model_size}, "
+                f"Step: {step}, "
+                f"Chinchilla: {crnt_percentages[step_idx] * 100:.2f}%, "
+                f"Iteration: {step_idx+1}/{len(steps)}\n\n"
+            )
 
             results = {
                 "step": [],
