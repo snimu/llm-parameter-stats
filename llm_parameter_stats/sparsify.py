@@ -174,27 +174,28 @@ def sparsify_model(
         model: GPTNeoXForCausalLM,
         sparsity_band: tuple[float, float],
         inplace: bool = False,
-) -> tuple[GPTNeoXForCausalLM, float, float, float, int]:
+) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int]:
     stds = []
-    abs_maxs = []
     num_nonzero = 0
     mean = 0.0
     numel = 0
+    maximum = -1e9
+    minimum = 1e9
 
     for parameter in model.parameters():
         if sparsity_band != (0.0, 0.0):
             parameter.data = sparsify_band(parameter.data, sparsity_band, inplace=inplace)
         stds.append(parameter.data.std().item())
-        abs_maxs.append(parameter.data.abs().max().item())
+        maximum = max(maximum, parameter.data.max().item())
+        minimum = min(minimum, parameter.data.min().item())
         num_nonzero += (parameter == 0.0).sum().item()
         mean += parameter.data.mean().item()
         numel += parameter.data.numel()
 
     std = np.mean(stds).item()
-    abs_max = np.mean(abs_maxs).item()
     mean = mean / numel
 
-    return model, std, mean, abs_max, num_nonzero
+    return model, std, mean, maximum, minimum, numel, num_nonzero
 
 
 @save_beartype
@@ -322,8 +323,10 @@ def main() -> None:
                 "sparsity_band": [],
                 "perplexity": [],
                 "std": [],
-                "abs_max": [],
+                "maximum": [],
+                "minimum": [],
                 "mean": [],
+                "numel": [],
                 "num_nonzero": [],
             }
 
@@ -348,7 +351,7 @@ def main() -> None:
                 model = model.to("cuda")
                 model.eval()
 
-                model, std, mean, abs_max, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
+                model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
 
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
@@ -361,7 +364,9 @@ def main() -> None:
                 results["perplexity"].append(perplexity)
                 results["std"].append(std)
                 results["mean"].append(mean)
-                results["abs_max"].append(abs_max)
+                results["maximum"].append(maximum)
+                results["minimum"].append(minimum)
+                results["numel"].append(numel)
                 results["num_nonzero"].append(num_nonzero)
 
             shutil.rmtree(f"./models/pythia-{model_size}/step{step}")
