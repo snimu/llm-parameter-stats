@@ -356,7 +356,11 @@ def main() -> None:
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
-                loop.write(f"{sparsity_band=}, {perplexity=:.3f}, {std=:.3f}, {abs_max=:.3f}, {num_nonzero=}")
+                loop.write(
+                    f"{sparsity_band=}, {perplexity=:.3f}, "
+                    f"{std=:.3f}, {maximum=:.3f}, {minimum=:.3f}, "
+                    f"{numel=}, {num_nonzero=}"
+                )
 
                 results["step"].append(step)
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
