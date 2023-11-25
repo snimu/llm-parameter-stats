@@ -5,6 +5,7 @@ import sys
 import os 
 import urllib
 import shutil
+import itertools
 from collections.abc import Sequence
 
 import zipfile
@@ -121,6 +122,7 @@ def sparsify_band(
         tensor: torch.Tensor | nn.Parameter,
         band: tuple[float, float],
         inplace: bool = False,
+        sparsify_based_on_absolute_value: bool = False,
 ) -> torch.Tensor | nn.Parameter:
     """Sparsify a tensor by setting values within a band to zero.
 
@@ -133,6 +135,12 @@ def sparsify_band(
             If, instead, band=(0.1, 0.2), the bottom 10% to 20% of the values will be set to zero.
         inplace: 
             Whether to modify the tensor in-place.
+        sparsify_based_on_absolute_value:
+            If True, sparsify based on the absolute value of the tensor.
+            A sparsity_band of (0.0, 0.1) will sparsify the bottom 10% of the absolute values.
+            If False, sparsify based on the value of the tensor.
+            A sparsity_band of (0.0, 0.1) will sparsify the bottom 10% of the values 
+            - likely meaning the largest negative values.
 
     Returns:
         The sparsified tensor (or Parameter).
@@ -140,8 +148,9 @@ def sparsify_band(
     if not inplace:
         tensor = tensor.clone()
 
-    signs = torch.sign(tensor)
-    tensor = tensor.abs()
+    if sparsify_based_on_absolute_value:
+        signs = torch.sign(tensor)
+        tensor = tensor.abs()
 
     # Get the values in the tensor as a 1-D array
     values = tensor.view(-1).detach().cpu().numpy()
@@ -150,8 +159,7 @@ def sparsify_band(
 
     # Don't sparsify if idx1 == idx2
     if idx1 == idx2:
-        tensor = signs * tensor
-        return tensor
+        return signs * tensor if sparsify_based_on_absolute_value else tensor
 
     # Sort the values
     sorted_values = np.sort(values)
@@ -167,7 +175,7 @@ def sparsify_band(
     # Set the values within the band to zero
     tensor[mask] = 0.0
     # Return the sparsified tensor
-    return signs * tensor
+    return signs * tensor if sparsify_based_on_absolute_value else tensor
 
 
 @save_beartype
@@ -175,6 +183,7 @@ def sparsify_model(
         model: GPTNeoXForCausalLM,
         sparsity_band: tuple[float, float],
         inplace: bool = False,
+        sparsify_based_on_absolute_value: bool = False,
 ) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int]:
     stds = []
     num_nonzero = 0
@@ -185,7 +194,12 @@ def sparsify_model(
 
     for parameter in model.parameters():
         if sparsity_band != (0.0, 0.0):
-            parameter.data = sparsify_band(parameter.data, sparsity_band, inplace=inplace)
+            parameter.data = sparsify_band(
+                parameter.data, 
+                sparsity_band, 
+                inplace=inplace,
+                sparsify_based_on_absolute_value=sparsify_based_on_absolute_value,
+            )
         stds.append(parameter.data.std().item())
         maximum = max(maximum, parameter.data.max().item())
         minimum = min(minimum, parameter.data.min().item())
@@ -327,6 +341,7 @@ def main() -> None:
                 "step": [],
                 "percentage_chinchilla_optimal": [],
                 "sparsity_band": [],
+                "sparsify_based_on_absolute_value": [],
                 "perplexity": [],
                 "std": [],
                 "maximum": [],
@@ -342,8 +357,8 @@ def main() -> None:
                 cache_dir=f"./models/pythia-{model_size}/step{step}",
             )
 
-            loop = tqdm(sparsity_bands)
-            for sparsity_band in loop:
+            loop = tqdm(itertools.product(sparsity_bands, [True, False]), total=len(sparsity_bands)*2)
+            for sparsity_band, sparsify_based_on_absolute_value in loop:
                 description = f"{sparsity_band=}"
                 loop.set_description(description + "; preparing model")
 
@@ -358,7 +373,12 @@ def main() -> None:
                 model.eval()
                 model.requires_grad_(False)
 
-                model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
+                model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(
+                    model=model, 
+                    sparsity_band=sparsity_band, 
+                    inplace=True, 
+                    sparsify_based_on_absolute_value=sparsify_based_on_absolute_value,
+                )
 
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
@@ -372,6 +392,7 @@ def main() -> None:
                 results["step"].append(step)
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
                 results["sparsity_band"].append(sparsity_band)
+                results["sparsify_based_on_absolute_value"].append(sparsify_based_on_absolute_value)
                 results["perplexity"].append(perplexity)
                 results["std"].append(std)
                 results["mean"].append(mean)
