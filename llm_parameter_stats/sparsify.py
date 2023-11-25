@@ -356,6 +356,7 @@ def main() -> None:
 
                 model = model.to("cuda")
                 model.eval()
+                model.requires_grad_(False)
 
                 model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(model, sparsity_band, inplace=True)
 
