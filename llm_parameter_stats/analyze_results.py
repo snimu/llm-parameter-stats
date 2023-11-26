@@ -170,7 +170,7 @@ def plot_results(
 
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
     for key in keys:
-        if key in ("parameter", "step", "step_next"):
+        if key in ("parameter", "step", "step_next", "percentage_of_chinchilla_optimal"):
             continue
         for i, (df, model_size) in enumerate(zip(dfs, model_sizes)):
             df = df[df['parameter'] == "all_parameters"]
@@ -298,19 +298,27 @@ def analyze_models(show: bool = True) -> None:
         dfs_inter_parameter.append(df[df['step_next'] - df['step'] < 10_000])
         dfs_inter_parameter_10_000.append(df[df['step_next'] - df['step'] == 10_000])
 
+    # Add some measures to the dfs so we can plot them
     for i, model_size in enumerate(model_sizes):
+        # First off, add the percentage of chinchilla optimal steps
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_intra_parameter[i]['step'].tolist()
-        )
+        ) * 100
         dfs_intra_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_inter_parameter[i]['step_next'].tolist()
-        )
+        ) * 100
         dfs_inter_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_inter_parameter_10_000[i]['step_next'].tolist()
-        )
+        ) * 100
         dfs_inter_parameter_10_000[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+
+        # Then add the ratio of maximum to minimum value (for intra-parameter)
+        dfs_intra_parameter[i]['max_to_min'] = (
+            dfs_intra_parameter[i]['maximum'].abs() 
+            / dfs_intra_parameter[i]['minimum'].abs()
+        )
 
     # Create video of histogram
     # for i, model_size in enumerate(model_sizes):
