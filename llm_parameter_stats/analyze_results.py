@@ -8,41 +8,58 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from beartype import beartype
+try:
+    from beartype import beartype
+except ImportError:
+    pass
 
 
-# STEPS = [0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)]
-PYTHIA_BATCH_SIZE = 2e6  # 2 million
+def save_beartype(func):
+    if version.parse(sys.version.split(" ")[0]) >= version.parse("3.10"):
+        return beartype(func)
+    else:
+        return func
 
 
-@beartype
+def pairwise(x):
+    try:
+        return itertools.pairwise(x)
+    except AttributeError:
+        return zip(x[:-1], x[1:])
+
+
+def save_inference_mode(func):
+    if hasattr(torch, "inference_mode") and callable(torch.inference_mode):
+        return torch.inference_mode()(func)
+    else:
+        return torch.no_grad()(func)
+
+
+@save_beartype
 def get_chinchilla_optimal_steps(
         model_size: str,
 ) -> int:
-    model_size = model_size.split("pythia-")[1]
     if "m" in model_size: 
-        factor = 1e6
+        model_size = float(model_size.split("m")[0]) * 1e6
     elif "b" in model_size:
-        factor = 1e9
+        model_size = float(model_size.split("b")[0]) * 1e9
     else:
         raise ValueError(f"Model size {model_size} not supported.")
-    model_size = int(model_size.split("m")[0]) * factor
 
-    num_samples_chinchilla_optimal = int(20 * model_size)
+    num_samples_chinchilla_optimal = 20 * model_size
     num_steps_chinchilla_optimal = int(num_samples_chinchilla_optimal / PYTHIA_BATCH_SIZE)
     return num_steps_chinchilla_optimal
 
 
-@beartype
+@save_beartype
 def get_percentage_of_chinchilla_optimal(
         model_size: str,
-        steps: Sequence[int],
-) -> np.ndarray:
+        steps: Sequence[int] = STEPS,
+) -> torch.Tensor:
     num_steps_chinchilla_optimal = get_chinchilla_optimal_steps(model_size)
-    return np.array(steps) / num_steps_chinchilla_optimal
+    return torch.tensor(steps) / num_steps_chinchilla_optimal
 
-
-@beartype
+@save_beartype
 def str_to_list(text: str) -> list[float]:
     """Convert a string to a list of floats."""
     text = text.strip()
@@ -56,7 +73,7 @@ def str_to_list(text: str) -> list[float]:
     return ast.literal_eval(text)
 
 
-@beartype
+@save_beartype
 def histogram_video(df: pd.DataFrame, model_size: str, parameter: str) -> None:
     """
     Create a video of the histograms.
@@ -121,7 +138,7 @@ def histogram_video(df: pd.DataFrame, model_size: str, parameter: str) -> None:
         anim.save(f"results/pythia-{model_size}/histogram/{parameter}.gif", writer='pillow')
 
 
-@beartype
+@save_beartype
 def plot_results(
         dfs: Sequence[pd.DataFrame], 
         model_sizes: Sequence[str], 
@@ -162,7 +179,7 @@ def plot_results(
         plt.close()
 
 
-@beartype
+@save_beartype
 def analyze_models(show: bool = True) -> None:
     model_sizes = [
         "70m", "70m-deduped",
