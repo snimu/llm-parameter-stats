@@ -1,9 +1,11 @@
 """Analysis of the parameter statistics of the Pythia models."""
 
+import sys
 import ast
 import os 
 from collections.abc import Sequence
 
+import torch
 import pandas as pd 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -12,6 +14,21 @@ try:
     from beartype import beartype
 except ImportError:
     pass
+from packaging import version
+
+
+STEPS = torch.tensor([0] + [2**i for i in range(10)] + [i * 1000 for i in range(1, 144)])
+PYTHIA_BATCH_SIZE = 2e6  # 2 million
+MODEL_SIZES = [
+        "70m", "70m-deduped",
+        "160m", "160m-deduped",
+        "410m", "410m-deduped", 
+        "1b", "1b-deduped",
+        "1.4b", "1.4b-deduped",
+        "2.8b", "2.8b-deduped",
+        # "6.9b", "6.9b-deduped",
+        # "12b", "12b-deduped",
+]
 
 
 def save_beartype(func):
@@ -58,6 +75,7 @@ def get_percentage_of_chinchilla_optimal(
 ) -> torch.Tensor:
     num_steps_chinchilla_optimal = get_chinchilla_optimal_steps(model_size)
     return torch.tensor(steps) / num_steps_chinchilla_optimal
+
 
 @save_beartype
 def str_to_list(text: str) -> list[float]:
@@ -144,18 +162,27 @@ def plot_results(
         model_sizes: Sequence[str], 
         df_type: str,
         show: bool = True,
+        name_suffix: str = "",
+        x_axis: str = "step",
 ) -> None:
     keys = dfs[0].keys()
     assert df_type in ("intra_parameter", "inter_parameter", "inter_parameter_10_000")
 
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
     for key in keys:
         if key in ("parameter", "step", "step_next"):
             continue
-        for df, model_size in zip(dfs, model_sizes):
+        for i, (df, model_size) in enumerate(zip(dfs, model_sizes)):
             df = df[df['parameter'] == "all_parameters"]
-            plt.plot(df['step'], df[key], label=model_size)
+            plt.plot(
+                df[x_axis], 
+                df[key], 
+                label=model_size, 
+                linestyle=":" if "deduped" in model_size else "-",  # deduped models have a dot in the legend
+                color=colors[int(i/2)],  # deduped and non-deduped models have the same color
+            )
         
-        plt.xlabel("Step")
+        plt.xlabel(x_axis)
         plt.ylabel(key)
 
         title = f"{key} ({df_type})"
@@ -173,24 +200,91 @@ def plot_results(
             plt.show()
         else:
             os.makedirs(f"results/all/{df_type}", exist_ok=True)  # TODO: think of more consistent naming for dirs
-            plt.savefig(f"results/all/{df_type}/{key}.png", dpi=300)
+            plt.savefig(f"results/all/{df_type}/{key}{name_suffix}.png", dpi=300)
         plt.cla()
         plt.clf()
         plt.close()
 
 
+def plot_set_of_results_by_step(
+        dfs_intra_parameter: Sequence[pd.DataFrame],
+        dfs_inter_parameter: Sequence[pd.DataFrame],
+        dfs_inter_parameter_10_000: Sequence[pd.DataFrame] | None,
+        model_sizes: Sequence[str],
+        show: bool = True,
+        name_suffix: str = "",
+) -> None:
+    plot_results(
+        dfs_intra_parameter, 
+        model_sizes, 
+        df_type="intra_parameter", 
+        show=show, 
+        x_axis="step",
+        name_suffix=name_suffix,
+    )
+    plot_results(
+        dfs_inter_parameter, 
+        model_sizes, 
+        df_type="inter_parameter", 
+        show=show, 
+        x_axis="step",
+        name_suffix=name_suffix,
+    )
+
+    if dfs_inter_parameter_10_000 is None:
+        return 
+
+    plot_results(
+        dfs_inter_parameter_10_000, 
+        model_sizes, 
+        df_type="inter_parameter_10_000", 
+        show=show, 
+        x_axis="step",
+        name_suffix=name_suffix,
+    )
+
+
+def plot_set_of_results_by_chinchillar_perc(
+        dfs_intra_parameter: Sequence[pd.DataFrame],
+        dfs_inter_parameter: Sequence[pd.DataFrame],
+        dfs_inter_parameter_10_000: Sequence[pd.DataFrame] | None,
+        model_sizes: Sequence[str],
+        show: bool = True,
+        name_suffix: str = "",
+) -> None:
+    plot_results(
+        dfs_intra_parameter, 
+        model_sizes, 
+        df_type="intra_parameter", 
+        show=show, 
+        x_axis="percentage_of_chinchilla_optimal",
+        name_suffix=name_suffix,
+    )
+    plot_results(
+        dfs_inter_parameter, 
+        model_sizes, 
+        df_type="inter_parameter", 
+        show=show, 
+        x_axis="percentage_of_chinchilla_optimal",
+        name_suffix=name_suffix,
+    )
+
+    if dfs_inter_parameter_10_000 is None:
+        return 
+
+    plot_results(
+        dfs_inter_parameter_10_000, 
+        model_sizes, 
+        df_type="inter_parameter_10_000", 
+        show=show, 
+        x_axis="percentage_of_chinchilla_optimal",
+        name_suffix=name_suffix,
+    )
+
+
 @save_beartype
 def analyze_models(show: bool = True) -> None:
-    model_sizes = [
-        "70m", "70m-deduped",
-        "160m", "160m-deduped",
-        "410m", "410m-deduped", 
-        "1b", "1b-deduped",
-        # "1.4b", "1.4b-deduped",
-        # "2.8b", "2.8b-deduped",
-        # "6.9b", "6.9b-deduped",
-        # "12b", "12b-deduped",
-    ]
+    model_sizes = MODEL_SIZES
 
     dfs_hist = []
     dfs_intra_parameter = []
@@ -204,15 +298,75 @@ def analyze_models(show: bool = True) -> None:
         dfs_inter_parameter.append(df[df['step_next'] - df['step'] < 10_000])
         dfs_inter_parameter_10_000.append(df[df['step_next'] - df['step'] == 10_000])
 
+    for i, model_size in enumerate(model_sizes):
+        percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
+            model_size, steps=dfs_intra_parameter[i]['step'].tolist()
+        )
+        dfs_intra_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+        percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
+            model_size, steps=dfs_inter_parameter[i]['step_next'].tolist()
+        )
+        dfs_inter_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+        percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
+            model_size, steps=dfs_inter_parameter_10_000[i]['step_next'].tolist()
+        )
+        dfs_inter_parameter_10_000[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+
     # Create video of histogram
     # for i, model_size in enumerate(model_sizes):
     #     histogram_video(dfs_hist[i], model_size, "all_parameters")
 
     # Plot results
-    plot_results(dfs_intra_parameter, model_sizes, df_type="intra_parameter", show=show)
-    plot_results(dfs_inter_parameter, model_sizes, df_type="inter_parameter", show=show)
-    plot_results(dfs_inter_parameter_10_000, model_sizes, df_type="inter_parameter_10_000", show=show)
+    plot_set_of_results_by_step(
+        dfs_intra_parameter, 
+        dfs_inter_parameter, 
+        dfs_inter_parameter_10_000, 
+        model_sizes, 
+        show=show,
+        name_suffix="_by_step",
+    )
+    plot_set_of_results_by_chinchillar_perc(
+        dfs_intra_parameter, 
+        dfs_inter_parameter, 
+        dfs_inter_parameter_10_000, 
+        model_sizes, 
+        show=show,
+        name_suffix="_by_chinchilla_perc",
+    )
 
+    # Plot results for the first 1000 steps
+    # First, reduce the dfs s.t. they only contain the first 1000 steps
+    dfs_intra_parameter_first_1000 = [df[df['step'] <= 1000] for df in dfs_intra_parameter]
+    dfs_inter_parameter_first_1000 = [df[df['step'] <= 1000] for df in dfs_inter_parameter]
+
+    # Then, plot the results
+    plot_set_of_results_by_step(
+        dfs_inter_parameter=dfs_inter_parameter_first_1000,
+        dfs_intra_parameter=dfs_intra_parameter_first_1000,
+        dfs_inter_parameter_10_000=None,
+        model_sizes=model_sizes,
+        show=show,
+        name_suffix="_1000_steps_by_step",
+    )
+
+    # Plot the results for the first 100% (so 1.0) of chinchillar optimal steps
+    dfs_intra_parameter_first_100_perc = [
+        df[df['percentage_of_chinchilla_optimal'] <= 1.0]
+        for df in dfs_intra_parameter
+    ]
+    dfs_inter_parameter_first_100_perc = [
+        df[df['percentage_of_chinchilla_optimal'] <= 1.0] 
+        for df in dfs_inter_parameter
+    ]
+
+    plot_set_of_results_by_chinchillar_perc(
+        dfs_inter_parameter=dfs_inter_parameter_first_100_perc,
+        dfs_intra_parameter=dfs_intra_parameter_first_100_perc,
+        dfs_inter_parameter_10_000=None,
+        model_sizes=model_sizes,
+        show=show,
+        name_suffix="_100_perc_by_chinchilla_perc",
+    )
 
 
 if __name__ == "__main__":
