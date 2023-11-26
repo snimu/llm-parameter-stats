@@ -148,34 +148,28 @@ def sparsify_band(
     if not inplace:
         tensor = tensor.clone()
 
+    # Calculate the number of elements to sparsify
+    num_elements = tensor.numel()
+    start_idx = int(band[0] * num_elements)
+    end_idx = int(band[1] * num_elements)
+
+    # Flatten the tensor for simplicity
+    flat_tensor = tensor.view(-1)
+
+    # Sort the tensor to find the threshold for sparsification
     if sparsify_based_on_absolute_value:
-        signs = torch.sign(tensor)
-        tensor = tensor.abs()
+        values, indices = flat_tensor.abs().sort()
+    else:
+        values, indices = flat_tensor.sort()
 
-    # Get the values in the tensor as a 1-D array
-    values = tensor.view(-1).detach().cpu().numpy()
-    # Compute the indices of the band
-    idx1, idx2 = int(len(values) * band[0]), int(len(values) * band[1])
+    # Identify the indices to sparsify
+    sparsify_indices = indices[start_idx:end_idx]
 
-    # Don't sparsify if idx1 == idx2
-    if idx1 == idx2:
-        return signs * tensor if sparsify_based_on_absolute_value else tensor
+    # Set the specified values to zero
+    flat_tensor[sparsify_indices] = 0
 
-    # Sort the values
-    sorted_values = np.sort(values)
-    # Get the values at the band indices
-    band_values = sorted_values[idx1:idx2]
-
-    # Create a mask for values within the band
-    mask = (
-        (tensor >= band_values[0]) 
-        & (tensor <= band_values[-1])
-    ).to(tensor.device, torch.bool)
-
-    # Set the values within the band to zero
-    tensor[mask] = 0.0
-    # Return the sparsified tensor
-    return signs * tensor if sparsify_based_on_absolute_value else tensor
+    # Reshape the tensor back to its original shape
+    return tensor.view_as(tensor)
 
 
 @save_beartype
@@ -376,7 +370,7 @@ def main() -> None:
                 model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(
                     model=model, 
                     sparsity_band=sparsity_band, 
-                    inplace=True, 
+                    inplace=False, 
                     sparsify_based_on_absolute_value=sparsify_based_on_absolute_value,
                 )
 
@@ -384,7 +378,8 @@ def main() -> None:
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
                 loop.write(
-                    f"{sparsity_band=}, {perplexity=:.3f}, "
+                    f"{sparsity_band=}, use_abs={sparsify_based_on_absolute_value}, "
+                    f"{perplexity=:.3f}, "
                     f"{std=:.3f}, {maximum=:.3f}, {minimum=:.3f}, "
                     f"{numel=}, {num_nonzero=}"
                 )
