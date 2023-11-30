@@ -136,7 +136,7 @@ def sparsify_band(
         inplace: 
             Whether to modify the tensor in-place.
         taken_from:
-            "positive", "negative", or "absolute_value".
+            "pos", "neg", or "abs".
 
     Returns:
         The sparsified tensor (or Parameter).
@@ -152,12 +152,12 @@ def sparsify_band(
     # Flatten the tensor for simplicity
     flat_tensor = tensor.view(-1)
 
-    if taken_from == "positive":
+    if taken_from == "pos":
         sign = 1
-    elif taken_from == "negative":
+    elif taken_from == "neg":
         sign = -1
         flat_tensor = -flat_tensor
-    elif taken_from == "absolute_value":
+    elif taken_from == "abs":
         sign = flat_tensor.sign()
         flat_tensor = flat_tensor.abs()
     else:
@@ -326,7 +326,7 @@ def main() -> None:
         steps += additional_steps
         crnt_percentages = percentages + additional_percentages.tolist()
         steps, crnt_percentages = deduplicate_steps_and_percentages(steps, crnt_percentages)
-        taken_froms = ["positive", "negative", "absolute_value"]
+        taken_froms = ["pos", "neg", "abs"]
 
         for step_idx, step in enumerate(steps):
             rich.print(
@@ -389,10 +389,10 @@ def main() -> None:
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
                 loop.write(
-                    f"{sparsity_band=}, {taken_from=}, "
-                    f"{perplexity=:.3f}, "
-                    f"{std=:.3f}, {maximum=:.3f}, {minimum=:.3f}, "
-                    f"{numel=}, {num_nonzero=}"
+                    f"band={sparsity_band}, mode={taken_from}, "
+                    f"loss={perplexity:.3f}, "
+                    f"{std=:.3f}, max={maximum:.3f}, min={minimum:.3f}, "
+                    f"{numel=:,}, nonzero={num_nonzero:,}"
                 )
 
                 results["step"].append(step)
