@@ -173,7 +173,7 @@ def sparsify_band(
     flat_tensor[sparsify_indices] = 0
 
     # Reshape the tensor back to its original shape
-    return (sign * tensor).view_as(tensor)
+    return (sign * flat_tensor).view_as(tensor)
 
 
 @save_beartype
@@ -361,7 +361,7 @@ def main() -> None:
                 total=len(sparsity_bands) * len(taken_froms),
             )
             for sparsity_band, taken_from in loop:
-                if sparsify_band == (0.0, 0.0) and taken_from != "positive":
+                if (sparsity_band == (0.0, 0.0)) and (taken_from != "positive"):
                     continue  # only calc baseline once
 
                 description = f"{sparsity_band=}"
