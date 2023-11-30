@@ -173,7 +173,7 @@ def sparsify_band(
     flat_tensor[sparsify_indices] = 0
 
     # Reshape the tensor back to its original shape
-    return sign * tensor.view_as(tensor)
+    return (sign * tensor).view_as(tensor)
 
 
 @save_beartype
