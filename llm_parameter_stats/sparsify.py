@@ -166,6 +166,16 @@ def sparsify_band(
     # Sort the tensor to find the threshold for sparsification
     values, indices = flat_tensor.sort()
 
+    # We want the smallest absolute numbers with positive/negative sign;
+    # however, in the sorted tensor, a bunch of large negative numbers will come before
+    # the small positive numbers. So, we need to find the first zero in the sorted tensor
+    # and then add that index to the start and end indices.
+    if taken_from in ["pos", "neg"] and band[0] == 0.0:
+        first_zero_idx = torch.sum(values < 0).item()
+        start_idx += first_zero_idx
+        end_idx += first_zero_idx
+
+
     # Identify the indices to sparsify
     sparsify_indices = indices[start_idx:end_idx]
 
