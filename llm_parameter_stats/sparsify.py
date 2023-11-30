@@ -361,7 +361,7 @@ def main() -> None:
                 total=len(sparsity_bands) * len(taken_froms),
             )
             for sparsity_band, taken_from in loop:
-                if (sparsity_band == (0.0, 0.0)) and (taken_from != "positive"):
+                if (sparsity_band == (0.0, 0.0)) and (taken_from != "pos"):
                     continue  # only calc baseline once
 
                 description = f"{sparsity_band=}"
