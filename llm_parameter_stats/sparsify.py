@@ -123,7 +123,7 @@ def sparsify_band(
         band: tuple[float, float],
         taken_from: str,
         inplace: bool = False,
-) -> torch.Tensor | nn.Parameter:
+) -> tuple[torch.Tensor | nn.Parameter, int, int]:
     """Sparsify a tensor by setting values within a band to zero.
 
     Args:
@@ -169,11 +169,18 @@ def sparsify_band(
     # Identify the indices to sparsify
     sparsify_indices = indices[start_idx:end_idx]
 
+    num_sparsified_pos = int(torch.sum((sign * flat_tensor)[sparsify_indices] > 0).item())
+    num_sparsified_neg = int(torch.sum((sign * flat_tensor)[sparsify_indices] < 0).item())
+
     # Set the specified values to zero
     flat_tensor[sparsify_indices] = 0
 
     # Reshape the tensor back to its original shape
-    return (sign * flat_tensor).view_as(tensor)
+    return (
+        (sign * flat_tensor).view_as(tensor),
+        num_sparsified_pos,
+        num_sparsified_neg,
+    )
 
 
 @save_beartype
@@ -182,22 +189,26 @@ def sparsify_model(
         sparsity_band: tuple[float, float],
         taken_from: str,
         inplace: bool = False,
-) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int]:
+) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int, int, int]:
     stds = []
     num_nonzero = 0
     mean = 0.0
     numel = 0
     maximum = -1e9
     minimum = 1e9
+    num_sparsified_pos = 0 
+    num_sparsified_neg = 0
 
     for parameter in model.parameters():
         if sparsity_band != (0.0, 0.0):
-            parameter.data = sparsify_band(
+            parameter.data, npos, nneg = sparsify_band(
                 parameter.data, 
                 sparsity_band, 
                 inplace=inplace,
                 taken_from=taken_from,
             )
+            num_sparsified_pos += npos
+            num_sparsified_neg += nneg
         stds.append(parameter.data.std().item())
         maximum = max(maximum, parameter.data.max().item())
         minimum = min(minimum, parameter.data.min().item())
@@ -208,7 +219,11 @@ def sparsify_model(
     std = np.mean(stds).item()
     mean = mean / numel
 
-    return model, std, mean, maximum, minimum, numel, num_nonzero
+    return (
+        model, std, mean, 
+        maximum, minimum, 
+        numel, num_nonzero, num_sparsified_pos, num_sparsified_neg,
+    )
 
 
 @save_beartype
@@ -348,6 +363,8 @@ def main() -> None:
                 "mean": [],
                 "numel": [],
                 "num_nonzero": [],
+                "num_sparsified_pos": [],
+                "num_sparsified_neg": [],
             }
 
             tokenizer = AutoTokenizer.from_pretrained(
@@ -378,7 +395,11 @@ def main() -> None:
                 model.eval()
                 model.requires_grad_(False)
 
-                model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(
+                (
+                    model, std, mean, 
+                    maximum, minimum, 
+                    numel, num_nonzero, num_sparsified_pos, num_sparsified_neg
+                ) = sparsify_model(
                     model=model, 
                     sparsity_band=sparsity_band, 
                     taken_from=taken_from,
@@ -389,10 +410,11 @@ def main() -> None:
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
                 loop.write(
-                    f"band={sparsity_band}, mode={taken_from}, "
+                    f"{sparsity_band}, {taken_from}, "
                     f"loss={perplexity:.3f}, "
                     f"{std=:.3f}, max={maximum:.3f}, min={minimum:.3f}, "
-                    f"{numel=:,}, nonzero={num_nonzero:,}"
+                    f"{numel=:,}, non0={num_nonzero:,}, "
+                    f"nsp={num_sparsified_pos:,}, nsn={num_sparsified_neg:,}"
                 )
 
                 results["step"].append(step)
@@ -406,6 +428,8 @@ def main() -> None:
                 results["minimum"].append(minimum)
                 results["numel"].append(numel)
                 results["num_nonzero"].append(num_nonzero)
+                results["num_sparsified_pos"].append(num_sparsified_pos)
+                results["num_sparsified_neg"].append(num_sparsified_neg)
 
             shutil.rmtree(f"./models/pythia-{model_size}/step{step}")
 
