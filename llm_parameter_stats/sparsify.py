@@ -121,8 +121,8 @@ def deduplicate_steps_and_percentages(
 def sparsify_band(
         tensor: torch.Tensor | nn.Parameter,
         band: tuple[float, float],
+        taken_from: str,
         inplace: bool = False,
-        sparsify_based_on_absolute_value: bool = False,
 ) -> torch.Tensor | nn.Parameter:
     """Sparsify a tensor by setting values within a band to zero.
 
@@ -135,12 +135,8 @@ def sparsify_band(
             If, instead, band=(0.1, 0.2), the bottom 10% to 20% of the values will be set to zero.
         inplace: 
             Whether to modify the tensor in-place.
-        sparsify_based_on_absolute_value:
-            If True, sparsify based on the absolute value of the tensor.
-            A sparsity_band of (0.0, 0.1) will sparsify the bottom 10% of the absolute values.
-            If False, sparsify based on the value of the tensor.
-            A sparsity_band of (0.0, 0.1) will sparsify the bottom 10% of the values 
-            - likely meaning the largest negative values.
+        taken_from:
+            "positive", "negative", or "absolute_value".
 
     Returns:
         The sparsified tensor (or Parameter).
@@ -156,11 +152,19 @@ def sparsify_band(
     # Flatten the tensor for simplicity
     flat_tensor = tensor.view(-1)
 
-    # Sort the tensor to find the threshold for sparsification
-    if sparsify_based_on_absolute_value:
-        values, indices = flat_tensor.abs().sort()
+    if taken_from == "positive":
+        sign = 1
+    elif taken_from == "negative":
+        sign = -1
+        flat_tensor = -flat_tensor
+    elif taken_from == "absolute_value":
+        sign = flat_tensor.sign()
+        flat_tensor = flat_tensor.abs()
     else:
-        values, indices = flat_tensor.sort()
+        raise ValueError(f"take_from={taken_from} not supported.")
+
+    # Sort the tensor to find the threshold for sparsification
+    values, indices = flat_tensor.sort()
 
     # Identify the indices to sparsify
     sparsify_indices = indices[start_idx:end_idx]
@@ -169,15 +173,15 @@ def sparsify_band(
     flat_tensor[sparsify_indices] = 0
 
     # Reshape the tensor back to its original shape
-    return tensor.view_as(tensor)
+    return sign * tensor.view_as(tensor)
 
 
 @save_beartype
 def sparsify_model(
         model: GPTNeoXForCausalLM,
         sparsity_band: tuple[float, float],
+        taken_from: str,
         inplace: bool = False,
-        sparsify_based_on_absolute_value: bool = False,
 ) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int]:
     stds = []
     num_nonzero = 0
@@ -192,7 +196,7 @@ def sparsify_model(
                 parameter.data, 
                 sparsity_band, 
                 inplace=inplace,
-                sparsify_based_on_absolute_value=sparsify_based_on_absolute_value,
+                taken_from=taken_from,
             )
         stds.append(parameter.data.std().item())
         maximum = max(maximum, parameter.data.max().item())
@@ -294,24 +298,24 @@ def main() -> None:
         (0.0, 0.0),
 
         # Sparsify the bottom n% of the parameters
-        (0.0, 1e-5),
         (0.0, 1e-4),
         (0.0, 1e-3),
         (0.0, 1e-2),
+        (0.0, 5e-2),
         (0.0, 1e-1),
 
         # Sparsify the top n% of the parameters
-        (1-1e-5, 1.0),
         (1-1e-4, 1.0),
         (1-1e-3, 1.0),
         (1-1e-2, 1.0),
+        (1-5e-2, 1.0),
         (1-1e-1, 1.0),
 
         # Sparsify the middle n% of the parameters as a control group
-        (0.5-5e-6, 0.5+5e-6),
         (0.5-5e-5, 0.5+5e-5),
         (0.5-5e-4, 0.5+5e-4),
         (0.5-5e-3, 0.5+5e-3),
+        (0.5-2.5e-2, 0.5+2.5e-2),
         (0.5-5e-2, 0.5+5e-2),
     ]
     _, dataset = load_test_datasets()
@@ -322,6 +326,7 @@ def main() -> None:
         steps += additional_steps
         crnt_percentages = percentages + additional_percentages.tolist()
         steps, crnt_percentages = deduplicate_steps_and_percentages(steps, crnt_percentages)
+        taken_froms = ["positive", "negative", "absolute_value"]
 
         for step_idx, step in enumerate(steps):
             rich.print(
@@ -335,7 +340,7 @@ def main() -> None:
                 "step": [],
                 "percentage_chinchilla_optimal": [],
                 "sparsity_band": [],
-                "sparsify_based_on_absolute_value": [],
+                "taken_from": [],
                 "perplexity": [],
                 "std": [],
                 "maximum": [],
@@ -351,8 +356,14 @@ def main() -> None:
                 cache_dir=f"./models/pythia-{model_size}/step{step}",
             )
 
-            loop = tqdm(itertools.product(sparsity_bands, [True, False]), total=len(sparsity_bands)*2)
-            for sparsity_band, sparsify_based_on_absolute_value in loop:
+            loop = tqdm(
+                itertools.product(sparsity_bands, taken_froms), 
+                total=len(sparsity_bands) * len(taken_froms),
+            )
+            for sparsity_band, taken_from in loop:
+                if sparsify_band == (0.0, 0.0) and taken_from != "positive":
+                    continue  # only calc baseline once
+
                 description = f"{sparsity_band=}"
                 loop.set_description(description + "; preparing model")
 
@@ -370,15 +381,15 @@ def main() -> None:
                 model, std, mean, maximum, minimum, numel, num_nonzero = sparsify_model(
                     model=model, 
                     sparsity_band=sparsity_band, 
+                    taken_from=taken_from,
                     inplace=False, 
-                    sparsify_based_on_absolute_value=sparsify_based_on_absolute_value,
                 )
 
                 perplexity = calculate_perplexities(
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
                 loop.write(
-                    f"{sparsity_band=}, use_abs={sparsify_based_on_absolute_value}, "
+                    f"{sparsity_band=}, {taken_from=}, "
                     f"{perplexity=:.3f}, "
                     f"{std=:.3f}, {maximum=:.3f}, {minimum=:.3f}, "
                     f"{numel=}, {num_nonzero=}"
@@ -387,7 +398,7 @@ def main() -> None:
                 results["step"].append(step)
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
                 results["sparsity_band"].append(sparsity_band)
-                results["sparsify_based_on_absolute_value"].append(sparsify_based_on_absolute_value)
+                results["taken_from"].append(taken_from)
                 results["perplexity"].append(perplexity)
                 results["std"].append(std)
                 results["mean"].append(mean)
