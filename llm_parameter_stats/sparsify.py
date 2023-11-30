@@ -171,6 +171,7 @@ def sparsify_band(
     # the small positive numbers. So, we need to find the first zero in the sorted tensor
     # and then add that index to the start and end indices.
     if taken_from in ["pos", "neg"] and band[0] == 0.0:
+        # because sign is switched for neg, always sparsify pos vals here
         first_zero_idx = torch.sum(values < 0).item()
         start_idx += first_zero_idx
         end_idx += first_zero_idx
@@ -199,7 +200,19 @@ def sparsify_model(
         sparsity_band: tuple[float, float],
         taken_from: str,
         inplace: bool = False,
-) -> tuple[GPTNeoXForCausalLM, float, float, float, float, int, int, int, int]:
+) -> tuple[
+        GPTNeoXForCausalLM,  # sparsified model
+        float,               # std
+        float,               # mean   
+        float,               # maximum
+        float,               # minimum
+        str,                 # max_param
+        str,                 # min_param
+        int,                 # numel
+        int,                 # num_nonzero
+        int,                 # num_sparsified_pos
+        int                  # num_sparsified_neg
+]:
     stds = []
     num_nonzero = 0
     mean = 0.0
@@ -208,8 +221,10 @@ def sparsify_model(
     minimum = 1e9
     num_sparsified_pos = 0 
     num_sparsified_neg = 0
+    max_param = ""
+    min_param = ""
 
-    for parameter in model.parameters():
+    for name, parameter in model.named_parameters():
         if sparsity_band != (0.0, 0.0):
             parameter.data, npos, nneg = sparsify_band(
                 parameter.data, 
@@ -220,8 +235,17 @@ def sparsify_model(
             num_sparsified_pos += npos
             num_sparsified_neg += nneg
         stds.append(parameter.data.std().item())
-        maximum = max(maximum, parameter.data.max().item())
-        minimum = min(minimum, parameter.data.min().item())
+
+        new_maximum = parameter.data.max().item()
+        new_minimum = parameter.data.min().item()
+
+        if new_maximum > maximum:
+            maximum = new_maximum
+            max_param = name
+        if new_minimum < minimum:
+            minimum = new_minimum
+            min_param = name
+        
         num_nonzero += (parameter != 0.0).sum().item()
         mean += parameter.data.mean().item()
         numel += parameter.data.numel()
@@ -232,6 +256,7 @@ def sparsify_model(
     return (
         model, std, mean, 
         maximum, minimum, 
+        max_param, min_param,
         numel, num_nonzero, num_sparsified_pos, num_sparsified_neg,
     )
 
@@ -370,6 +395,8 @@ def main() -> None:
                 "std": [],
                 "maximum": [],
                 "minimum": [],
+                "max_param": [],
+                "min_param": [],
                 "mean": [],
                 "numel": [],
                 "num_nonzero": [],
@@ -408,7 +435,8 @@ def main() -> None:
                 (
                     model, std, mean, 
                     maximum, minimum, 
-                    numel, num_nonzero, num_sparsified_pos, num_sparsified_neg
+                    max_param, min_param,
+                    numel, num_nonzero, num_sparsified_pos, num_sparsified_neg,
                 ) = sparsify_model(
                     model=model, 
                     sparsity_band=sparsity_band, 
@@ -436,6 +464,8 @@ def main() -> None:
                 results["mean"].append(mean)
                 results["maximum"].append(maximum)
                 results["minimum"].append(minimum)
+                results["max_param"].append(max_param)
+                results["min_param"].append(min_param)
                 results["numel"].append(numel)
                 results["num_nonzero"].append(num_nonzero)
                 results["num_sparsified_pos"].append(num_sparsified_pos)
