@@ -304,15 +304,21 @@ def analyze_models(show: bool = True) -> None:
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_intra_parameter[i]['step'].tolist()
         ) * 100
-        dfs_intra_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+        dfs_intra_parameter[i] = dfs_intra_parameter[i].assign(
+            percentage_of_chinchilla_optimal=percentage_of_chinchilla_optimal
+        )
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_inter_parameter[i]['step_next'].tolist()
         ) * 100
-        dfs_inter_parameter[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+        dfs_inter_parameter[i] = dfs_inter_parameter[i].assign(
+            percentage_of_chinchilla_optimal=percentage_of_chinchilla_optimal
+        )
         percentage_of_chinchilla_optimal = get_percentage_of_chinchilla_optimal(
             model_size, steps=dfs_inter_parameter_10_000[i]['step_next'].tolist()
         ) * 100
-        dfs_inter_parameter_10_000[i]['percentage_of_chinchilla_optimal'] = percentage_of_chinchilla_optimal
+        dfs_inter_parameter_10_000[i] = dfs_inter_parameter_10_000[i].assign(
+            percentage_of_chinchilla_optimal=percentage_of_chinchilla_optimal
+        )
 
         # Then add the ratio of maximum to minimum value (for intra-parameter)
         dfs_intra_parameter[i]['max_to_min'] = (
@@ -357,13 +363,23 @@ def analyze_models(show: bool = True) -> None:
         name_suffix="_1000_steps_by_step",
     )
 
-    # Plot the results for the first 100% (so 1.0) of chinchillar optimal steps
+    # Plot the results for all values up to 1.0 and the first value above 1.0 of chinchillar optimal steps
     dfs_intra_parameter_first_100_perc = [
-        df[df['percentage_of_chinchilla_optimal'] <= 1.0]
+        df[
+            df['percentage_of_chinchilla_optimal'] 
+            <= df[
+                df['percentage_of_chinchilla_optimal'] >= 1.0
+            ]['percentage_of_chinchilla_optimal'].min()
+        ]
         for df in dfs_intra_parameter
     ]
     dfs_inter_parameter_first_100_perc = [
-        df[df['percentage_of_chinchilla_optimal'] <= 1.0] 
+        df[
+            df['percentage_of_chinchilla_optimal'] 
+            <= df[
+                df['percentage_of_chinchilla_optimal'] >= 1.0
+            ]['percentage_of_chinchilla_optimal'].min()
+        ]
         for df in dfs_inter_parameter
     ]
 
