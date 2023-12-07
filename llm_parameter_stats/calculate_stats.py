@@ -106,7 +106,7 @@ def optional_remove(model_size: str, current_step: int) -> None:
 
 
 @save_beartype
-def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
+def initialize_results_dicts() -> tuple[dict[str, ist[float | str]], ...]:
     results_intra_parameter = {
         "parameter": [],
         "step": [],
@@ -158,6 +158,49 @@ def initialize_results_dicts() -> tuple[dict[str, str | float], ...]:
     }
 
     return results_intra_parameter, results_histogram, results_inter_parameter
+
+
+@save_beartype
+def initialize_accumulated_parameter_dict() -> dict[str, torch.Tensor]:
+    parameter_dict = {
+        "all_parameters": torch.tensor([]),
+        "all_weights": torch.tensor([]),
+        "all_biases": torch.tensor([]),
+        "all_dense_weights": torch.tensor([]),
+        "all_dense_biases": torch.tensor([]),
+        "all_attention_weights": torch.tensor([]),
+        "all_attention_biases": torch.tensor([]),
+        "all_layernorm_weights": torch.tensor([]),
+        "all_layernorm_biases": torch.tensor([]),
+    }
+    return parameter_dict
+
+
+@save_beartype
+def accumulate_parameters(
+        name: str, 
+        parameter: nn.Parameter | torch.Tensor,
+        parameter_dict: dict[str, torch.Tensor],
+) -> dict[str, torch.Tensor]:
+    parameter_dict["all_parameters"] = torch.cat((parameter_dict["all_parameters"], parameter.flatten()))
+    if "weight" in name:
+        parameter_dict["all_weights"] = torch.cat((parameter_dict["all_weights"], parameter.flatten()))
+        if "layernorm" in name:
+            parameter_dict["all_layernorm_weights"] = torch.cat((parameter_dict["all_layernorm_weights"], parameter.flatten()))
+        elif "attention" in name:
+            parameter_dict["all_attention_weights"] = torch.cat((parameter_dict["all_attention_weights"], parameter.flatten()))
+        else:
+            parameter_dict["all_dense_weights"] = torch.cat((parameter_dict["all_dense_weights"], parameter.flatten()))
+    elif "bias" in name:
+        parameter_dict["all_biases"] = torch.cat((parameter_dict["all_biases"], parameter.flatten()))
+        if "layernorm" in name:
+            parameter_dict["all_layernorm_biases"] = torch.cat((parameter_dict["all_layernorm_biases"], parameter.flatten()))
+        elif "attention" in name:
+            parameter_dict["all_attention_biases"] = torch.cat((parameter_dict["all_attention_biases"], parameter.flatten()))
+        else:
+            parameter_dict["all_dense_biases"] = torch.cat((parameter_dict["all_dense_biases"], parameter.flatten()))
+    return parameter_dict
+    
 
 
 @save_beartype
@@ -337,6 +380,41 @@ def add_histogram(
     return results
 
 
+@save_beartype
+def add_accumulated_parameter_statistics(
+        intra_parameter_dict: dict[str, list[str | float]],
+        histogram_dict: dict[str, list[str | float]],
+        parameter_dict: dict[str, torch.Tensor],
+        step_n: int,
+) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
+    for name, parameter in parameter_dict.items():
+        rich.print(f"Calculating statistics for {name}")
+        intra_parameter_dict = add_intra_parameter_statistics(
+            intra_parameter_dict, parameter, name, step_n
+        )
+        rich.print(f"Calculating histogram for {name}")
+        histogram_dict = add_histogram(
+            histogram_dict, parameter, name, step_n
+        )
+    return intra_parameter_dict, histogram_dict
+
+
+@save_beartype
+def add_accumulated_inter_parameter_statistics(
+        inter_parameter_dict: dict[str, list[str | float]],
+        parameter_dict: dict[str, torch.Tensor],
+        parameter_dict_next: dict[str, torch.Tensor],
+        step_n: int,
+        step_n_next: int,
+) -> dict[str, list[str | float]]:
+    for name, parameter in parameter_dict.items():
+        rich.print(f"Calculating statistics for {name}")
+        inter_parameter_dict = add_inter_parameter_statistics(
+            inter_parameter_dict, parameter, parameter_dict_next[name], name, step_n, step_n_next
+        )
+    return inter_parameter_dict
+
+
 ################
 # --- MAIN --- #
 ################
@@ -385,8 +463,8 @@ def main() -> None:
                 rich.print(f"ERROR: {e}")
                 continue 
 
-            all_parameter_values = torch.tensor([])
-            all_parameter_values_next = torch.tensor([])
+            all_parameter_dict = initialize_accumulated_parameter_dict()
+            all_parameter_dict_next = initialize_accumulated_parameter_dict()
 
             # Calculate the statistics
             rich.print("Calculating statistics...")
@@ -399,8 +477,8 @@ def main() -> None:
                 results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
                 parameter_n = parameter_n.to("cpu")  # make sure to free up memory
 
-                all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten())).to("cpu")  # make sure to free up memory
-                all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten())).to("cpu")  # make sure to free up memory
+                all_parameter_dict = accumulate_parameters(name_n, parameter_n.to("cpu"), all_parameter_dict)
+                all_parameter_dict_next = accumulate_parameters(name_n_next, parameter_n_next.to("cpu"), all_parameter_dict_next)
                 results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
 
                 if step_n_next == steps[-1]:
@@ -420,17 +498,15 @@ def main() -> None:
 
             # Add data for all parameters (on cpu, cannot hold all parameters on gpu)
             rich.print("Calculating statistics for all parameters...")
-            results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, all_parameter_values, "all_parameters", step_n)
-            results_histogram = add_histogram(results_histogram, all_parameter_values, "all_parameters", step_n)
-            results_inter_parameter = add_inter_parameter_statistics(
-                results_inter_parameter, all_parameter_values, all_parameter_values_next, "all_parameters", step_n, step_n_next
+            results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
+                results_intra_parameter, results_histogram, all_parameter_dict, step_n
+            )
+            results_inter_parameter = add_accumulated_inter_parameter_statistics(
+                results_inter_parameter, all_parameter_dict, all_parameter_dict_next, step_n, step_n_next
             )
             if step_n_next == steps[-1]:
-                results_intra_parameter = add_intra_parameter_statistics(
-                    results_intra_parameter, all_parameter_values_next, "all_parameters", step_n_next
-                )
-                results_histogram = add_histogram(
-                    results_histogram, all_parameter_values_next, "all_parameters", step_n_next
+                results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
+                    results_intra_parameter, results_histogram, all_parameter_dict_next, step_n_next
                 )
 
             # Calculate inter-parameter statistics in 10_000-step-intervals
@@ -440,14 +516,15 @@ def main() -> None:
                 cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
                 model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
 
-                all_parameter_values = torch.tensor([])
-                all_parameter_values_next = torch.tensor([])
+                all_parameter_dict = initialize_accumulated_parameter_dict()
+                all_parameter_dict_next = initialize_accumulated_parameter_dict()
+
                 for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
                     zip(model_10_000.named_parameters(), model_n_next.named_parameters()),
                     total=num_parameters,
                 ):
-                    all_parameter_values = torch.cat((all_parameter_values, parameter_n.flatten()))
-                    all_parameter_values_next = torch.cat((all_parameter_values_next, parameter_n_next.flatten()))
+                    all_parameter_dict = accumulate_parameters(name_n, parameter_n.to("cpu"), all_parameter_dict)
+                    all_parameter_dict_next = accumulate_parameters(name_n_next, parameter_n_next.to("cpu"), all_parameter_dict_next)
 
                     # Inter-parameter statistics
                     parameter_n = parameter_n.to(DEVICE)
@@ -460,13 +537,12 @@ def main() -> None:
 
                 # Add data for all parameters
                 rich.print("Calculating statistics for all parameters...")
-                results_inter_parameter = add_inter_parameter_statistics(
-                    results=results_inter_parameter, 
-                    parameter_now=all_parameter_values_next, 
-                    parameter_last=all_parameter_values, 
-                    name="all_parameters", 
-                    step_last=step_n_next - 10_000, 
-                    step_now=step_n_next,
+                results_inter_parameter = add_accumulated_inter_parameter_statistics(
+                    inter_parameter_dict=results_inter_parameter,
+                    parameter_dict=all_parameter_dict, 
+                    parameter_dict_next=all_parameter_dict_next,
+                    step_n=step_n_next - 10_000, 
+                    step_n_next=step_n_next,
                 )
 
                 # Free up storage
