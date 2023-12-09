@@ -29,6 +29,17 @@ MODEL_SIZES = [
         # "6.9b", "6.9b-deduped",
         # "12b", "12b-deduped",
 ]
+PARAMETERS_OF_INTEREST = [
+    "all_parameters",
+    "all_weights",
+    "all_biases",
+    "all_dense_weights",
+    "all_dense_biases",
+    "all_attention_weights",
+    "all_attention_biases",
+    "all_layernorm_weights",
+    "all_layernorm_biases",
+]
 
 
 def save_beartype(func):
@@ -172,38 +183,40 @@ def plot_results(
     for key in keys:
         if key in ("parameter", "step", "step_next", "percentage_of_chinchilla_optimal"):
             continue
-        for i, (df, model_size) in enumerate(zip(dfs, model_sizes)):
-            df = df[df['parameter'] == "all_parameters"]
-            plt.plot(
-                df[x_axis], 
-                df[key], 
-                label=model_size, 
-                linestyle=":" if "deduped" in model_size else "-",  # deduped models have a dot in the legend
-                color=colors[int(i/2)],  # deduped and non-deduped models have the same color
+
+        for parameter in PARAMETERS_OF_INTEREST:
+            for i, (df, model_size) in enumerate(zip(dfs, model_sizes)):
+                df = df[df['parameter'] == parameter]
+                plt.plot(
+                    df[x_axis], 
+                    df[key], 
+                    label=model_size, 
+                    linestyle=":" if "deduped" in model_size else "-",  # deduped models have a dot in the legend
+                    color=colors[int(i/2)],  # deduped and non-deduped models have the same color
+                )
+            
+            plt.xlabel(x_axis)
+            plt.ylabel(key)
+
+            title = f"{key} ({df_type})"
+            plt.title(title)
+            plt.gcf().subplots_adjust(bottom=0.3)  # Make space for the legend
+            plt.legend(
+                bbox_to_anchor=(0., -0.3, 1., .102),  # Move the legend down
+                loc='upper left',
+                ncol=3, 
+                mode="expand", 
+                borderaxespad=0.
             )
-        
-        plt.xlabel(x_axis)
-        plt.ylabel(key)
 
-        title = f"{key} ({df_type})"
-        plt.title(title)
-        plt.gcf().subplots_adjust(bottom=0.3)  # Make space for the legend
-        plt.legend(
-            bbox_to_anchor=(0., -0.3, 1., .102),  # Move the legend down
-            loc='upper left',
-            ncol=3, 
-            mode="expand", 
-            borderaxespad=0.
-        )
-
-        if show:
-            plt.show()
-        else:
-            os.makedirs(f"results/all/{df_type}", exist_ok=True)  # TODO: think of more consistent naming for dirs
-            plt.savefig(f"results/all/{df_type}/{key}{name_suffix}.png", dpi=300)
-        plt.cla()
-        plt.clf()
-        plt.close()
+            if show:
+                plt.show()
+            else:
+                os.makedirs(f"results/plots/stats/{parameter}/{df_type}", exist_ok=True)
+                plt.savefig(f"results/plots/stats/{parameter}/{df_type}/{key}{name_suffix}.png", dpi=300)
+            plt.cla()
+            plt.clf()
+            plt.close()
 
 
 def plot_set_of_results_by_step(
@@ -421,7 +434,7 @@ def plot_sparsity(
     if show:
         plt.show()
     else:
-        savedir = "results/sparsified/plots"
+        savedir = "results/plots/sparsified"
         os.makedirs(savedir, exist_ok=True)
         plt.savefig(f"{savedir}/{filename.replace(' ', '')}.png", dpi=300)
 
@@ -491,5 +504,5 @@ def analyze_sparsified(show: bool = True) -> None:
 
 
 if __name__ == "__main__":
-    # analyze_model_stats(show=False)
-    analyze_sparsified(show=False)
+    analyze_model_stats(show=False)
+    # analyze_sparsified(show=False)
