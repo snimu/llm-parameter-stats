@@ -283,7 +283,7 @@ def plot_set_of_results_by_chinchillar_perc(
 
 
 @save_beartype
-def analyze_models(show: bool = True) -> None:
+def analyze_model_stats(show: bool = True) -> None:
     model_sizes = MODEL_SIZES
 
     dfs_hist = []
@@ -394,5 +394,5 @@ def analyze_models(show: bool = True) -> None:
 
 
 if __name__ == "__main__":
-    analyze_models(show=False)
+    analyze_model_stats(show=False)
 
