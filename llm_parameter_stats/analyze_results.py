@@ -402,7 +402,7 @@ def plot_sparsity(
         xlabel: str,
         ylabel: str,
         show: bool = True,
-        name_suffix: str = "",
+        filename: str = "",
 ) -> None:
     for x, y, label in zip(xs, ys, labels):
         plt.plot(x, y, label=label)
@@ -423,7 +423,7 @@ def plot_sparsity(
     else:
         savedir = "results/sparsified/plots"
         os.makedirs(savedir, exist_ok=True)
-        plt.savefig(f"{savedir}/{title}{name_suffix}.png", dpi=300)
+        plt.savefig(f"{savedir}/{filename.replace(' ', '')}.png", dpi=300)
 
     plt.cla()
     plt.clf()
@@ -442,6 +442,8 @@ def analyze_sparsified(show: bool = True) -> None:
         # Plot the taken-froms over each sparsity band
         for sparsity_band in sparsity_bands:
             df_sparsity = df[df['sparsity_band'] == sparsity_band]
+            # Sort the df by step
+            df_sparsity = df_sparsity.sort_values(by=['step'])
             xs = []
             ys = []
             labels = []
@@ -459,12 +461,14 @@ def analyze_sparsified(show: bool = True) -> None:
                 xlabel="Step",
                 ylabel="Loss",
                 show=show,
-                name_suffix=f"_{model_size}_sparsity_band_{sparsity_band}",
+                filename=f"{model_size}_sparsity_band_{sparsity_band}",
             )
 
         # Plot the sparsity bands from each taken-from
         for taken_from in taken_froms:
             df_taken_from = df[df['taken_from'] == taken_from]
+            # Sort the df by step
+            df_taken_from = df_taken_from.sort_values(by=['step'])
             xs = []
             ys = []
             labels = []
@@ -482,7 +486,7 @@ def analyze_sparsified(show: bool = True) -> None:
                 xlabel="Step",
                 ylabel="Loss",
                 show=show,
-                name_suffix=f"_{model_size}_taken_from_{taken_from}",
+                filename=f"{model_size}_taken_from_{taken_from}",
             )
 
 
