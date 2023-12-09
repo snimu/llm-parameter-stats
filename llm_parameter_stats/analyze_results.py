@@ -440,27 +440,27 @@ def analyze_sparsified(show: bool = True) -> None:
         sparsity_bands = ["(0.0, 0.1)", "(0.45, 0.55)", "(0.9, 1.0)"]
 
         # Plot the taken-froms over each sparsity band
-        # for sparsity_band in sparsity_bands:
-        #     df_sparsity = df[df['sparsity_band'] == sparsity_band]
-        #     xs = []
-        #     ys = []
-        #     labels = []
-        #     for taken_from in taken_froms:
-        #         df_taken_from = df_sparsity[df_sparsity['taken_from'] == taken_from]
-        #         xs.append(df_taken_from['step'].values)
-        #         ys.append(df_taken_from['perplexity'].values)
-        #         labels.append(taken_from)
+        for sparsity_band in sparsity_bands:
+            df_sparsity = df[df['sparsity_band'] == sparsity_band]
+            xs = []
+            ys = []
+            labels = []
+            for taken_from in taken_froms:
+                df_taken_from = df_sparsity[df_sparsity['taken_from'] == taken_from]
+                xs.append(df_taken_from['step'].values)
+                ys.append(df_taken_from['perplexity'].values)
+                labels.append(taken_from)
 
-        #     plot_sparsity(
-        #         xs=xs,
-        #         ys=ys,
-        #         labels=labels,
-        #         title=f"Sparsity band {sparsity_band} ({model_size})",
-        #         xlabel="Step",
-        #         ylabel="Loss",
-        #         show=show,
-        #         name_suffix=f"_{model_size}_sparsity_band_{sparsity_band}",
-        #     )
+            plot_sparsity(
+                xs=xs,
+                ys=ys,
+                labels=labels,
+                title=f"Sparsity band {sparsity_band} ({model_size})",
+                xlabel="Step",
+                ylabel="Loss",
+                show=show,
+                name_suffix=f"_{model_size}_sparsity_band_{sparsity_band}",
+            )
 
         # Plot the sparsity bands from each taken-from
         for taken_from in taken_froms:
