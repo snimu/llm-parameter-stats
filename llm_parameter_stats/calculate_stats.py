@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import functools
 
 import os
 import shutil
@@ -29,14 +30,14 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_HISTOGRAM_BINS = 100
 
 MODEL_SIZES = [
-        "70m", "70m-deduped",
-        "160m", "160m-deduped",
-        "410m", "410m-deduped", 
+        # "70m", "70m-deduped",
+        # "160m", "160m-deduped",
+        # "410m", "410m-deduped", 
         "1b", "1b-deduped",
         "1.4b", "1.4b-deduped",
         "2.8b", "2.8b-deduped",
-        "6.9b", "6.9b-deduped",
-        "12b", "12b-deduped",
+        # "6.9b", "6.9b-deduped",
+        # "12b", "12b-deduped",
 ]
 STEPS_POWER_OF_TWO = [2**i for i in range(10)]
 STEPS = [0] + STEPS_POWER_OF_TWO + [i * 1000 for i in range(1, 144)]
@@ -367,6 +368,7 @@ def add_histogram(
         name: str,
         step: int,
 ) -> dict[str, str | float]:
+    parameter = parameter.flatten().detach().cpu()
     counts, bin_edges = torch.histogram(parameter, bins=NUM_HISTOGRAM_BINS)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
@@ -388,11 +390,11 @@ def add_accumulated_parameter_statistics(
         step_n: int,
 ) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
     for name, parameter in parameter_dict.items():
-        rich.print(f"Calculating statistics for {name}")
+        if len(parameter) == 0:
+            continue
         intra_parameter_dict = add_intra_parameter_statistics(
             intra_parameter_dict, parameter, name, step_n
         )
-        rich.print(f"Calculating histogram for {name}")
         histogram_dict = add_histogram(
             histogram_dict, parameter, name, step_n
         )
@@ -408,11 +410,93 @@ def add_accumulated_inter_parameter_statistics(
         step_n_next: int,
 ) -> dict[str, list[str | float]]:
     for name, parameter in parameter_dict.items():
-        rich.print(f"Calculating statistics for {name}")
+        if len(parameter) == 0:
+            continue
         inter_parameter_dict = add_inter_parameter_statistics(
             inter_parameter_dict, parameter, parameter_dict_next[name], name, step_n, step_n_next
         )
     return inter_parameter_dict
+
+
+@save_beartype
+def accumulate_and_calculate_parameter_group_stats(
+        results_histogram: dict[str, list[str | float]],
+        results_intra_parameter: dict[str, list[str | float]],
+        results_inter_parameter: dict[str, list[str | float]],
+        model_n: GPTNeoXForCausalLM,
+        model_n_next: GPTNeoXForCausalLM,
+        steps: list[int],
+        step_n: int,
+        step_n_next: int,
+        num_parameters: int,
+        groups: list[str],
+        inter_parameter_only: bool = False,
+) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
+    """Do this grop by group to not duplicate the parameters in memory."""
+    # Accumulate the parameters
+    parameter_dict = initialize_accumulated_parameter_dict()
+    parameter_dict_next = initialize_accumulated_parameter_dict()
+
+    rich.print(f"Accumulating parameters for {', '.join(groups)}...")
+    for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
+        zip(model_n.named_parameters(), model_n_next.named_parameters()),
+        total=num_parameters,
+    ):
+        for parameter_group in groups:
+            if parameter_group == "all_parameters":
+                parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_weights":
+                if "weight" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_biases":
+                if "bias" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_dense_weights":
+                if "weight" in name_n and "layernorm" not in name_n and "attention" not in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_dense_biases":
+                if "bias" in name_n and "layernorm" not in name_n and "attention" not in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_attention_weights":
+                if "weight" in name_n and "attention" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_attention_biases":
+                if "bias" in name_n and "attention" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_layernorm_weights":
+                if "weight" in name_n and "layernorm" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+            elif parameter_group == "all_layernorm_biases":
+                if "bias" in name_n and "layernorm" in name_n:
+                    parameter_dict[parameter_group] = torch.cat((parameter_dict[parameter_group], parameter_n.flatten()))
+                    parameter_dict_next[parameter_group] = torch.cat((parameter_dict_next[parameter_group], parameter_n_next.flatten()))
+
+    # Calculate the statistics
+    rich.print(f"Calculating statistics for {', '.join(groups)}...")
+    if not inter_parameter_only:
+        results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
+            results_intra_parameter, results_histogram, parameter_dict, step_n
+        )
+        if step_n_next == steps[-1]:
+            results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
+                results_intra_parameter, results_histogram, parameter_dict_next, step_n_next
+            )
+    results_inter_parameter = add_accumulated_inter_parameter_statistics(
+        results_inter_parameter, parameter_dict, parameter_dict_next, step_n, step_n_next
+    )
+
+    # Free up memory
+    del parameter_dict, parameter_dict_next
+
+    return results_intra_parameter, results_histogram, results_inter_parameter
 
 
 ################
@@ -463,9 +547,6 @@ def main() -> None:
                 rich.print(f"ERROR: {e}")
                 continue 
 
-            all_parameter_dict = initialize_accumulated_parameter_dict()
-            all_parameter_dict_next = initialize_accumulated_parameter_dict()
-
             # Calculate the statistics
             rich.print("Calculating statistics...")
             for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
@@ -477,8 +558,6 @@ def main() -> None:
                 results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
                 parameter_n = parameter_n.to("cpu")  # make sure to free up memory
 
-                all_parameter_dict = accumulate_parameters(name_n, parameter_n.to("cpu"), all_parameter_dict)
-                all_parameter_dict_next = accumulate_parameters(name_n_next, parameter_n_next.to("cpu"), all_parameter_dict_next)
                 results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
 
                 if step_n_next == steps[-1]:
@@ -496,18 +575,34 @@ def main() -> None:
                 parameter_n = parameter_n.to("cpu")
                 parameter_n_next = parameter_n_next.to("cpu")
 
-            # Add data for all parameters (on cpu, cannot hold all parameters on gpu)
-            rich.print("Calculating statistics for all parameters...")
-            results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
-                results_intra_parameter, results_histogram, all_parameter_dict, step_n
+            # Calculate for all parameters
+            acc_and_calc = functools.partial(
+                accumulate_and_calculate_parameter_group_stats,
+                results_histogram=results_histogram,
+                results_intra_parameter=results_intra_parameter,
+                results_inter_parameter=results_inter_parameter,
+                model_n=model_n,
+                model_n_next=model_n_next,
+                steps=steps,
+                step_n=step_n,
+                step_n_next=step_n_next,
+                num_parameters=num_parameters,
             )
-            results_inter_parameter = add_accumulated_inter_parameter_statistics(
-                results_inter_parameter, all_parameter_dict, all_parameter_dict_next, step_n, step_n_next
+
+            results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                groups=["all_parameters"]
             )
-            if step_n_next == steps[-1]:
-                results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
-                    results_intra_parameter, results_histogram, all_parameter_dict_next, step_n_next
-                )
+            results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                groups=["all_weights", "all_biases"]
+            )
+            results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                groups=[
+                    "all_dense_weights", "all_dense_biases", 
+                    "all_attention_weights", "all_attention_biases", 
+                    "all_layernorm_weights", "all_layernorm_biases",
+                ]
+            )
+
 
             # Calculate inter-parameter statistics in 10_000-step-intervals
             if step_n_next >= 10_000:
@@ -516,16 +611,10 @@ def main() -> None:
                 cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
                 model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
 
-                all_parameter_dict = initialize_accumulated_parameter_dict()
-                all_parameter_dict_next = initialize_accumulated_parameter_dict()
-
                 for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
                     zip(model_10_000.named_parameters(), model_n_next.named_parameters()),
                     total=num_parameters,
                 ):
-                    all_parameter_dict = accumulate_parameters(name_n, parameter_n.to("cpu"), all_parameter_dict)
-                    all_parameter_dict_next = accumulate_parameters(name_n_next, parameter_n_next.to("cpu"), all_parameter_dict_next)
-
                     # Inter-parameter statistics
                     parameter_n = parameter_n.to(DEVICE)
                     parameter_n_next = parameter_n_next.to(DEVICE)
@@ -536,13 +625,32 @@ def main() -> None:
                     parameter_n_next = parameter_n_next.to("cpu")
 
                 # Add data for all parameters
-                rich.print("Calculating statistics for all parameters...")
-                results_inter_parameter = add_accumulated_inter_parameter_statistics(
-                    inter_parameter_dict=results_inter_parameter,
-                    parameter_dict=all_parameter_dict, 
-                    parameter_dict_next=all_parameter_dict_next,
-                    step_n=step_n_next - 10_000, 
+                acc_and_calc = functools.partial(
+                    accumulate_and_calculate_parameter_group_stats,
+                    results_histogram=results_histogram,
+                    results_intra_parameter=results_intra_parameter,
+                    results_inter_parameter=results_inter_parameter,
+                    model_n=model_10_000,
+                    model_n_next=model_n_next,
+                    steps=steps,
+                    step_n=step_n_next - 10_000,
                     step_n_next=step_n_next,
+                    num_parameters=num_parameters,
+                    inter_parameter_only=True,
+                )
+
+                results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                    groups=["all_parameters"]
+                )
+                results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                    groups=["all_weights", "all_biases"]
+                )
+                results_intra_parameter, results_histogram, results_inter_parameter = acc_and_calc(
+                    groups=[
+                        "all_dense_weights", "all_dense_biases", 
+                        "all_attention_weights", "all_attention_biases", 
+                        "all_layernorm_weights", "all_layernorm_biases",
+                    ]
                 )
 
                 # Free up storage
