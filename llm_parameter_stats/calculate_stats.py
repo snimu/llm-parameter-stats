@@ -546,6 +546,10 @@ def main() -> None:
                 errors.append(repr(e))
                 rich.print(f"ERROR: {e}")
                 continue 
+            except OSError as e:
+                errors.append(repr(e))
+                rich.print(f"ERROR: {e}")
+                continue
 
             # Calculate the statistics
             rich.print("Calculating statistics...")
