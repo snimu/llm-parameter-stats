@@ -198,7 +198,7 @@ def plot_results(
             plt.xlabel(x_axis)
             plt.ylabel(key)
 
-            title = f"{key} ({df_type})"
+            title = f"{parameter}: {key} ({df_type})"
             plt.title(title)
             plt.gcf().subplots_adjust(bottom=0.3)  # Make space for the legend
             plt.legend(
