@@ -613,7 +613,16 @@ def main() -> None:
                 rich.print("Calculating statistics for 10_000-step-intervals...")
 
                 cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
-                model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
+                try:
+                    model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
+                except EnvironmentError as e:
+                    errors.append(repr(e))
+                    rich.print(f"ERROR: {e}")
+                    continue
+                except OSError as e:
+                    errors.append(repr(e))
+                    rich.print(f"ERROR: {e}")
+                    continue
 
                 for (name_n, parameter_n), (name_n_next, parameter_n_next) in tqdm(
                     zip(model_10_000.named_parameters(), model_n_next.named_parameters()),
