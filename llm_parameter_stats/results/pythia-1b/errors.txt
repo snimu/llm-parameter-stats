@@ -1,0 +1,3 @@
+OSError("EleutherAI/pythia-1b does not appear to have a file named config.json. Checkout 'https://huggingface.co/EleutherAI/pythia-1b/step116000' for available files.")
+
+OSError("EleutherAI/pythia-1b does not appear to have a file named config.json. Checkout 'https://huggingface.co/EleutherAI/pythia-1b/step116000' for available files.")
