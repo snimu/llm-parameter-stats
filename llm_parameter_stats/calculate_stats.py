@@ -107,7 +107,7 @@ def optional_remove(model_size: str, current_step: int) -> None:
 
 
 @save_beartype
-def initialize_results_dicts() -> tuple[dict[str, ist[float | str]], ...]:
+def initialize_results_dicts() -> tuple[dict[str, list[float | str]], ...]:
     results_intra_parameter = {
         "parameter": [],
         "step": [],
