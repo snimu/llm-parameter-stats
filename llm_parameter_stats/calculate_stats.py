@@ -33,11 +33,11 @@ MODEL_SIZES = [
         # "70m", "70m-deduped",
         # "160m", "160m-deduped",
         # "410m", "410m-deduped", 
-        "1b", "1b-deduped",
-        "1.4b", "1.4b-deduped",
-        "2.8b", "2.8b-deduped",
-        # "6.9b", "6.9b-deduped",
-        # "12b", "12b-deduped",
+        # "1b", "1b-deduped",
+        # "1.4b", "1.4b-deduped",
+        # "2.8b", "2.8b-deduped",
+        "6.9b", "6.9b-deduped",
+        "12b", "12b-deduped",
 ]
 STEPS_POWER_OF_TWO = [2**i for i in range(10)]
 STEPS = [0] + STEPS_POWER_OF_TWO + [i * 1000 for i in range(1, 144)]
