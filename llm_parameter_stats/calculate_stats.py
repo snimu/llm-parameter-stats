@@ -85,12 +85,17 @@ def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
 
 
 @save_beartype
-def load_model(model_size: str, step: int, cache_dir: str) -> GPTNeoXForCausalLM:
+def load_model(
+        model_size: str, 
+        step: int, 
+        cache_dir: str, 
+        dtype: torch.dtype,
+) -> GPTNeoXForCausalLM:
     model = GPTNeoXForCausalLM.from_pretrained(
         f"EleutherAI/pythia-{model_size}",
         revision=f"step{step}",
         cache_dir=cache_dir,
-    )
+    ).to(dtype=dtype)
     return model
 
 
@@ -511,14 +516,15 @@ def main() -> None:
 
     steps = STEPS
     model_sizes =  MODEL_SIZES
+    dtype = torch.bfloat16
 
     for model_size in model_sizes:
         print(get_title(model_size))
 
         start_time_model = perf_counter()
         results_intra_parameter, results_histogram, results_inter_parameter = initialize_results_dicts()
-        model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}")
-        model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}")
+        model_n = load_model(model_size, steps[0], f"models/pythia-{model_size}/step{steps[0]}", dtype)
+        model_n_next = load_model(model_size, steps[1], f"models/pythia-{model_size}/step{steps[1]}", dtype)
 
         # Store errors in list to save them later
         # Don't save errors in above model initilization, because I want to see problems with it
@@ -540,8 +546,8 @@ def main() -> None:
 
             # Load the models
             try:
-                model_n = load_model(model_size, step_n, cache_dir_last) if step_n == 0 else model_n_next
-                model_n_next = load_model(model_size, step_n_next, cache_dir)
+                model_n = load_model(model_size, step_n, cache_dir_last, dtype) if step_n == 0 else model_n_next
+                model_n_next = load_model(model_size, step_n_next, cache_dir, dtype)
             except EnvironmentError as e:
                 errors.append(repr(e))
                 rich.print(f"ERROR: {e}")
@@ -614,7 +620,7 @@ def main() -> None:
 
                 cache_dir_10_000 = f"models/pythia-{model_size}/step{step_n_next - 10_000}"
                 try:
-                    model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000)
+                    model_10_000 = load_model(model_size, step_n_next - 10_000, cache_dir_10_000, dtype)
                 except EnvironmentError as e:
                     errors.append(repr(e))
                     rich.print(f"ERROR: {e}")
