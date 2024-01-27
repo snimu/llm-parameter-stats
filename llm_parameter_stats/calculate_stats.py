@@ -441,7 +441,7 @@ def accumulate_and_calculate_parameter_group_stats(
         groups: list[str],
         dtype: torch.dtype,
         inter_parameter_only: bool = False,
-) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
+) -> tuple[dict[str, list[str | float]], ...]:
     """Do this grop by group to not duplicate the parameters in memory."""
     # Accumulate the parameters
     parameter_dict = initialize_accumulated_parameter_dict()
