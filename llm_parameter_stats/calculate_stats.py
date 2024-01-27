@@ -81,7 +81,7 @@ def to_python(x: torch.Tensor | nn.Parameter | float) -> float | list[float]:
 def to_numpy(x: torch.Tensor | nn.Parameter | float) -> np.ndarray:
     if isinstance(x, float):
         return np.array(x)
-    return x.detach().cpu().numpy()
+    return x.to(torch.float32).detach().cpu().numpy()  # numpy: no bfloat16
 
 
 @save_beartype
@@ -350,7 +350,7 @@ def add_inter_parameter_statistics(
     results["step_next"].append(step_now)
 
     cos_sim = torch.nn.functional.cosine_similarity(parameter_now.flatten(), parameter_last.flatten(), dim=0)
-    results["cos_sim"].append(cos_sim.detach().cpu().numpy())
+    results["cos_sim"].append(to_numpy(cos_sim))
 
     delta = parameter_now - parameter_last
     results["l1_change"].append(to_python(delta.norm(1)))
@@ -372,8 +372,9 @@ def add_histogram(
         parameter: nn.Parameter | torch.Tensor,
         name: str,
         step: int,
+        dtype: torch.dtype,
 ) -> dict[str, str | float]:
-    parameter = parameter.flatten().detach().cpu()
+    parameter = parameter.flatten().detach().cpu().to(torch.float32)  # histogram: no bfloat16
     counts, bin_edges = torch.histogram(parameter, bins=NUM_HISTOGRAM_BINS)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_width = bin_edges[1] - bin_edges[0]
@@ -384,6 +385,8 @@ def add_histogram(
     results["bin_centers"].append(to_python(bin_centers))
     results["bin_width"].append(bin_width.item())
 
+    parameter = parameter.to(dtype)
+
     return results
 
 
@@ -393,6 +396,7 @@ def add_accumulated_parameter_statistics(
         histogram_dict: dict[str, list[str | float]],
         parameter_dict: dict[str, torch.Tensor],
         step_n: int,
+        dtype: torch.dtype
 ) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
     for name, parameter in parameter_dict.items():
         if len(parameter) == 0:
@@ -401,7 +405,7 @@ def add_accumulated_parameter_statistics(
             intra_parameter_dict, parameter, name, step_n
         )
         histogram_dict = add_histogram(
-            histogram_dict, parameter, name, step_n
+            histogram_dict, parameter, name, step_n, dtype
         )
     return intra_parameter_dict, histogram_dict
 
@@ -435,6 +439,7 @@ def accumulate_and_calculate_parameter_group_stats(
         step_n_next: int,
         num_parameters: int,
         groups: list[str],
+        dtype: torch.dtype,
         inter_parameter_only: bool = False,
 ) -> tuple[dict[str, list[str | float]], dict[str, list[str | float]]]:
     """Do this grop by group to not duplicate the parameters in memory."""
@@ -488,11 +493,11 @@ def accumulate_and_calculate_parameter_group_stats(
     rich.print(f"Calculating statistics for {', '.join(groups)}...")
     if not inter_parameter_only:
         results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
-            results_intra_parameter, results_histogram, parameter_dict, step_n
+            results_intra_parameter, results_histogram, parameter_dict, step_n, dtype
         )
         if step_n_next == steps[-1]:
             results_intra_parameter, results_histogram = add_accumulated_parameter_statistics(
-                results_intra_parameter, results_histogram, parameter_dict_next, step_n_next
+                results_intra_parameter, results_histogram, parameter_dict_next, step_n_next, dtype
             )
     results_inter_parameter = add_accumulated_inter_parameter_statistics(
         results_inter_parameter, parameter_dict, parameter_dict_next, step_n, step_n_next
@@ -568,13 +573,13 @@ def main() -> None:
                 results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n, name_n, step_n)
                 parameter_n = parameter_n.to("cpu")  # make sure to free up memory
 
-                results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n)
+                results_histogram = add_histogram(results_histogram, parameter_n, name_n, step_n, dtype)
 
                 if step_n_next == steps[-1]:
                     parameter_n_next = parameter_n_next.to(DEVICE)  # speed up calculations
                     results_intra_parameter = add_intra_parameter_statistics(results_intra_parameter, parameter_n_next, name_n_next, step_n_next)
                     parameter_n_next = parameter_n_next.to("cpu")  # free up memory
-                    results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next)
+                    results_histogram = add_histogram(results_histogram, parameter_n_next, name_n_next, step_n_next, dtype)
 
                 # Inter-parameter statistics
                 parameter_n = parameter_n.to(DEVICE)
@@ -596,6 +601,7 @@ def main() -> None:
                 steps=steps,
                 step_n=step_n,
                 step_n_next=step_n_next,
+                dtype=dtype,
                 num_parameters=num_parameters,
             )
 
@@ -655,6 +661,7 @@ def main() -> None:
                     step_n=step_n_next - 10_000,
                     step_n_next=step_n_next,
                     num_parameters=num_parameters,
+                    dtype=dtype,
                     inter_parameter_only=True,
                 )
 
