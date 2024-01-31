@@ -285,14 +285,13 @@ def get_batches(
 
 @save_beartype
 @save_inference_mode
-def calculate_perplexities(
+def calculate_loss(
         model: GPTNeoXForCausalLM, 
         tokenizer: AutoTokenizer, 
         text: str | Sequence[str],
         device: str | int | torch.device,
         loop: tqdm,
         loop_description: str,
-        exponentiate: bool = True,
 ) -> torch.Tensor:
     """Evaluate the perplexity of a model on a text."""
     num_tokens_per_sample = 128
@@ -391,7 +390,7 @@ def main() -> None:
                 "percentage_chinchilla_optimal": [],
                 "sparsity_band": [],
                 "taken_from": [],
-                "perplexity": [],
+                "loss": [],
                 "std": [],
                 "maximum": [],
                 "minimum": [],
@@ -444,12 +443,12 @@ def main() -> None:
                     inplace=False, 
                 )
 
-                perplexity = calculate_perplexities(
+                loss = calculate_loss(
                     model, tokenizer, dataset, "cuda", loop, description,
                 )
                 loop.write(
                     f"{sparsity_band}, {taken_from}, "
-                    f"loss={perplexity:.3f}, "
+                    f"loss={loss:.3f}, "
                     f"{std=:.3f}, max={maximum:.3f}, min={minimum:.3f}, "
                     f"{numel=:,}, non0={num_nonzero:,}, "
                     f"nsp={num_sparsified_pos:,}, nsn={num_sparsified_neg:,}"
@@ -459,7 +458,7 @@ def main() -> None:
                 results["percentage_chinchilla_optimal"].append(crnt_percentages[step_idx])
                 results["sparsity_band"].append(sparsity_band)
                 results["taken_from"].append(taken_from)
-                results["perplexity"].append(perplexity)
+                results["loss"].append(loss)
                 results["std"].append(std)
                 results["mean"].append(mean)
                 results["maximum"].append(maximum)
