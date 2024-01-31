@@ -304,7 +304,7 @@ def calculate_loss(
     # Batchify the input_ids
     batches = get_batches(input_ids, num_tokens_per_sample, batch_size)
 
-    # Calculate average loss and perplexity for each text
+    # Calculate average loss for each text
     total_loss = 0.0
 
     for i, batch in enumerate(batches):
@@ -340,6 +340,7 @@ def load_test_datasets():
 
 @save_beartype
 def main() -> None:
+    dtype = torch.bfloat16  # hopefully fits on machine
     percentages = [0.25, 0.5, 0.8, 0.9, 1.0]
     additional_steps = [i*1000 for i in range(10, 144, 10)] + [143_000]
     sparsity_bands = [
@@ -427,7 +428,7 @@ def main() -> None:
                     cache_dir=f"./models/pythia-{model_size}/step{step}",
                 )
 
-                model = model.to("cuda")
+                model = model.to(device="cuda", dtype=dtype)
                 model.eval()
                 model.requires_grad_(False)
 
