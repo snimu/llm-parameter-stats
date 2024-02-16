@@ -4,6 +4,7 @@ import sys
 import ast
 import os 
 from collections.abc import Sequence
+import itertools
 
 import torch
 import pandas as pd 
@@ -26,7 +27,7 @@ MODEL_SIZES = [
         "1b", "1b-deduped",
         "1.4b", "1.4b-deduped",
         "2.8b", "2.8b-deduped",
-        # "6.9b", "6.9b-deduped",
+        "6.9b"  # , "6.9b-deduped",
         # "12b", "12b-deduped",
 ]
 PARAMETERS_OF_INTEREST = [
@@ -179,7 +180,7 @@ def plot_results(
     keys = dfs[0].keys()
     assert df_type in ("intra_parameter", "inter_parameter", "inter_parameter_10_000")
 
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#0c4009']
     for key in keys:
         if key in ("parameter", "step", "step_next", "percentage_of_chinchilla_optimal"):
             continue
